@@ -1,0 +1,415 @@
+<title>Fuel Chain of Custody</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Karla:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E8E4D8;
+    --surface:#F4F1E7;
+    --surface-2:#DCD7C6;
+    --ink:#201D17;
+    --ink-soft:#4A4436;
+    --ink-faint:#8A8270;
+    --line:rgba(32,29,23,0.16);
+    --line-strong:rgba(32,29,23,0.30);
+    --accent:#B4690E;
+    --accent-ink:#FBF3E4;
+    --success:#2F6B4F;
+    --success-bg:rgba(47,107,79,0.10);
+    --warning:#9C6A0A;
+    --warning-bg:rgba(156,106,10,0.10);
+    --critical:#A23B2E;
+    --critical-bg:rgba(162,59,46,0.10);
+    --shadow: 0 1px 2px rgba(32,29,23,0.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15130E;
+      --surface:#1C1912;
+      --surface-2:#272319;
+      --ink:#ECE7D9;
+      --ink-soft:#C7C0AC;
+      --ink-faint:#8D856E;
+      --line:rgba(236,231,217,0.14);
+      --line-strong:rgba(236,231,217,0.26);
+      --accent:#E0A438;
+      --accent-ink:#1A1408;
+      --success:#5FAE86;
+      --success-bg:rgba(95,174,134,0.12);
+      --warning:#E0A438;
+      --warning-bg:rgba(224,164,56,0.12);
+      --critical:#E2776A;
+      --critical-bg:rgba(226,119,106,0.12);
+      --shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15130E;
+    --surface:#1C1912;
+    --surface-2:#272319;
+    --ink:#ECE7D9;
+    --ink-soft:#C7C0AC;
+    --ink-faint:#8D856E;
+    --line:rgba(236,231,217,0.14);
+    --line-strong:rgba(236,231,217,0.26);
+    --accent:#E0A438;
+    --accent-ink:#1A1408;
+    --success:#5FAE86;
+    --success-bg:rgba(95,174,134,0.12);
+    --warning:#E0A438;
+    --warning-bg:rgba(224,164,56,0.12);
+    --critical:#E2776A;
+    --critical-bg:rgba(226,119,106,0.12);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Karla',system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent); color:var(--accent-ink); }
+  a{ color:var(--accent); }
+  h1,h2,h3{ font-family:'Oswald',system-ui,sans-serif; text-wrap:balance; margin:0; color:var(--ink); }
+  .mono{ font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+  .eyebrow{
+    font-family:'Oswald',system-ui,sans-serif;
+    font-size:0.72rem;
+    font-weight:600;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 0.6rem;
+  }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce){ *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; } }
+
+  .page{ max-width:960px; margin:0 auto; padding:0 24px 96px; }
+
+  /* ── Masthead ── */
+  .masthead{
+    padding:64px 0 40px;
+    border-bottom:1px solid var(--line-strong);
+  }
+  .masthead h1{
+    font-size:clamp(2.2rem, 5vw, 3.4rem);
+    font-weight:700;
+    letter-spacing:-0.01em;
+    line-height:1.04;
+  }
+  .masthead .dek{
+    max-width:62ch;
+    margin:20px 0 0;
+    font-size:1.1rem;
+    color:var(--ink-soft);
+  }
+  .masthead .dek strong{ color:var(--ink); font-weight:600; }
+
+  section{ padding:56px 0; border-bottom:1px solid var(--line); }
+  section:last-of-type{ border-bottom:none; }
+  .section-head{ max-width:62ch; margin-bottom:36px; }
+  .section-head h2{ font-size:1.7rem; font-weight:600; margin-top:0.2rem; }
+  .section-head p{ color:var(--ink-soft); max-width:60ch; }
+
+  /* ── Three-way reconciliation diagram ── */
+  .reconcile{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin:0 0 28px;
+  }
+  .rec-node{
+    background:var(--surface);
+    border:1px solid var(--line-strong);
+    border-radius:3px;
+    padding:18px 16px;
+    box-shadow:var(--shadow);
+  }
+  .rec-node .tag{
+    font-family:'IBM Plex Mono'; font-size:0.68rem; letter-spacing:0.08em;
+    color:var(--ink-faint); text-transform:uppercase; display:block; margin-bottom:8px;
+  }
+  .rec-node .name{ font-family:'Oswald'; font-weight:600; font-size:1.02rem; margin-bottom:6px; }
+  .rec-node .desc{ font-size:0.88rem; color:var(--ink-soft); line-height:1.5; }
+  .rec-arrows{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:6px 0 22px; color:var(--ink-faint);
+  }
+  .rec-arrows .stem{ flex:1; height:1px; background:var(--line-strong); position:relative; max-width:180px; }
+  .rec-arrows .stem::after{
+    content:''; position:absolute; right:-1px; top:-3px;
+    border:3px solid transparent; border-left-color:var(--line-strong);
+  }
+  .rec-verdict{
+    text-align:center; font-family:'Oswald'; font-size:0.82rem; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--ink-faint);
+  }
+  .rec-outcomes{
+    display:flex; justify-content:center; gap:14px; margin-top:14px; flex-wrap:wrap;
+  }
+  .pill{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'IBM Plex Mono'; font-size:0.78rem; font-weight:500;
+    padding:6px 12px; border-radius:3px; border:1px solid transparent;
+  }
+  .pill.ok{ color:var(--success); background:var(--success-bg); border-color:currentColor; }
+  .pill.flag{ color:var(--critical); background:var(--critical-bg); border-color:currentColor; }
+
+  /* ── Chain of custody timeline ── */
+  .chain{ position:relative; margin-top:8px; }
+  .chain::before{
+    content:''; position:absolute; left:27px; top:8px; bottom:8px; width:1px;
+    background:var(--line-strong);
+  }
+  .stage{ position:relative; padding:0 0 0 68px; margin-bottom:38px; }
+  .stage:last-child{ margin-bottom:0; }
+  .stage .num{
+    position:absolute; left:0; top:-2px; width:56px; height:56px;
+    border:1px solid var(--line-strong); border-radius:3px;
+    background:var(--surface);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono'; font-weight:600; font-size:1.15rem; color:var(--accent);
+  }
+  .stage h3{ font-size:1.2rem; font-weight:600; margin-bottom:12px; padding-top:8px; }
+  .stage .rows{ display:grid; gap:10px; }
+  .stage .row{ display:grid; grid-template-columns:104px 1fr; gap:14px; align-items:baseline; }
+  .stage .row .k{
+    font-family:'Oswald'; font-size:0.68rem; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--ink-faint); padding-top:2px;
+  }
+  .stage .row .v{ color:var(--ink-soft); font-size:0.95rem; }
+  .stage .row .v strong{ color:var(--ink); font-weight:600; }
+  .stage .row.control .v{ color:var(--ink); }
+
+  /* ── People list ── */
+  .people-list{ display:grid; gap:16px; max-width:62ch; }
+  .people-list .item{ display:flex; gap:14px; }
+  .people-list .mark{ font-family:'IBM Plex Mono'; color:var(--accent); font-weight:600; flex-shrink:0; }
+  .people-list p{ margin:0; color:var(--ink-soft); }
+  .people-list strong{ color:var(--ink); font-weight:600; }
+
+  /* ── Tech grid ── */
+  .tech-grid{
+    display:grid; grid-template-columns:repeat(3,1fr); gap:1px;
+    background:var(--line-strong); border:1px solid var(--line-strong); border-radius:3px; overflow:hidden;
+  }
+  .tech-card{ background:var(--surface); padding:20px 18px; }
+  .tech-card .name{ font-family:'Oswald'; font-weight:600; font-size:0.98rem; margin-bottom:8px; }
+  .tech-card .desc{ font-size:0.86rem; color:var(--ink-soft); line-height:1.55; }
+
+  /* ── Mapping table ── */
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line-strong); border-radius:3px; }
+  table{ width:100%; border-collapse:collapse; min-width:560px; }
+  thead th{
+    text-align:left; font-family:'Oswald'; font-size:0.7rem; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--ink-faint); font-weight:600; padding:12px 16px; background:var(--surface-2);
+    border-bottom:1px solid var(--line-strong);
+  }
+  tbody td{ padding:13px 16px; border-bottom:1px solid var(--line); font-size:0.92rem; vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  td.stage-name{ color:var(--ink); font-weight:600; width:38%; }
+  .status{
+    display:inline-flex; align-items:center; gap:6px; font-family:'IBM Plex Mono'; font-size:0.76rem;
+    padding:3px 9px; border-radius:3px; white-space:nowrap;
+  }
+  .status.live{ color:var(--success); background:var(--success-bg); }
+  .status.next{ color:var(--warning); background:var(--warning-bg); }
+  .status.new{ color:var(--ink-faint); background:var(--surface-2); }
+
+  footer{ padding:40px 0 0; color:var(--ink-faint); font-size:0.86rem; }
+
+  @media (max-width:720px){
+    .reconcile{ grid-template-columns:1fr; }
+    .rec-arrows{ flex-direction:column; padding:14px 0; }
+    .rec-arrows .stem{ width:1px; height:24px; max-width:none; }
+    .rec-arrows .stem::after{ right:-3px; top:auto; bottom:-1px; transform:rotate(90deg); }
+    .tech-grid{ grid-template-columns:1fr; }
+    .stage .row{ grid-template-columns:1fr; gap:2px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Operations · Loss Prevention</p>
+    <h1>Fuel Chain of Custody</h1>
+    <p class="dek">A filling station only stays honest when every litre is independently verifiable at every handoff — from the depot's meter to the pump's nozzle. This is the modern flow, checkpoint by checkpoint, and the control that makes each one hold.</p>
+  </header>
+
+  <section id="principle">
+    <div class="section-head">
+      <p class="eyebrow">The Principle</p>
+      <h2>Three records that must agree</h2>
+      <p>No single log can be trusted on its own — theft hides in the gap between what was supposedly sent, what arrived, and what was sold. Reconcile three independently generated numbers, and a mismatch tells you exactly where the chain broke.</p>
+    </div>
+
+    <div class="reconcile">
+      <div class="rec-node">
+        <span class="tag">01 · Source</span>
+        <div class="name">Dispatched</div>
+        <div class="desc">The depot's own calibrated meter, sent electronically to HQ the moment the tanker leaves — never carried only on paper by the driver.</div>
+      </div>
+      <div class="rec-node">
+        <span class="tag">02 · Forecourt</span>
+        <div class="name">Received</div>
+        <div class="desc">The station's seal check and dip reading the moment the tanker arrives, taken before a single drop is offloaded.</div>
+      </div>
+      <div class="rec-node">
+        <span class="tag">03 · Ledger</span>
+        <div class="name">Accounted For</div>
+        <div class="desc">The daily tank dip plus every pump's sealed meter total, reconciled against what was actually sold.</div>
+      </div>
+    </div>
+    <div class="rec-arrows">
+      <span class="stem"></span><span class="stem"></span><span class="stem"></span>
+    </div>
+    <p class="rec-verdict">Do the three tie out?</p>
+    <div class="rec-outcomes">
+      <span class="pill ok">✓ Reconciled — within tolerance, close the day</span>
+      <span class="pill flag">! Variance — escalate before it repeats</span>
+    </div>
+  </section>
+
+  <section id="chain">
+    <div class="section-head">
+      <p class="eyebrow">The Flow</p>
+      <h2>Seven checkpoints, one unbroken chain</h2>
+      <p>Fuel physically passes through these stages in order. Each one produces its own record, so a loss can be traced to the exact link where it happened.</p>
+    </div>
+
+    <div class="chain">
+      <div class="stage">
+        <div class="num">01</div>
+        <h3>Depot Dispatch</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">The tanker loads at the source depot against your purchase order; the depot's calibrated meter records exact litres per compartment.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">Compartments are sealed immediately with uniquely numbered, tamper-evident seals <strong>before</strong> the tanker leaves the gate.</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">A digital dispatch note — product, quantity per compartment, seal numbers, driver, tanker registration — sent straight to HQ and the receiving station, independent of the driver.</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">02</div>
+        <h3>Transit</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">The tanker travels the approved route to the station.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">GPS with geofencing flags any route deviation or unscheduled stop; electronic seals, where fitted, transmit an "opened" event with time and location if broken en route.</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">A live, timestamped route log attached to the delivery.</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">03</div>
+        <h3>Arrival &amp; Seal Verification</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">On arrival, station staff check every seal number against the digital dispatch note — before anything is offloaded.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">A broken, missing, or mismatched seal stops the delivery on the spot and escalates immediately. Nobody offloads first and "sorts it out after."</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">A seal-verification entry with photos, logged against the dispatch note.</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">04</div>
+        <h3>Offload &amp; Dip Reconciliation</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">An opening dip is taken on the receiving tank, the tanker offloads, then a closing dip is taken.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">The tank's rise must match the dispatched quantity within normal thermal-expansion tolerance — roughly <span class="mono">0.3–0.5%</span> of volume. The person confirming this is never the person who raised the purchase order.</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">Before/after dip readings, variance, and sign-off — tied to the dispatch note and seal check.</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">05</div>
+        <h3>Daily Tank Reconciliation</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">Every day: opening stock + deliveries − metered pump sales is checked against the tank's actual closing dip.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">Automatic Tank Gauges (ATG), where fitted, give a continuous electronic cross-check against the manual dip rather than replacing it.</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">A daily variance figure per tank, auto-flagged the moment it crosses threshold.</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">06</div>
+        <h3>Pump Shift Controls</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">Each pump's sealed, non-resettable totalizer is read at shift open and shift close; litres dispensed is the difference.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">Cash and mobile-money collected must match litres dispensed × price. Attendants never fuel their own vehicle off-log, and shift/pump assignments rotate unpredictably.</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">A shift reconciliation: opening/closing meter readings, collections, and variance.</span></div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="num">07</div>
+        <h3>Escalation &amp; Investigation</h3>
+        <div class="rows">
+          <div class="row"><span class="k">Happens</span><span class="v">Any variance past its threshold — at delivery, in the daily tank figure, or on a shift — is routed for review, never quietly written off.</span></div>
+          <div class="row control"><span class="k">Control</span><span class="v">Repeat variances tied to the same attendant, pump, or tanker are tracked as a pattern, not filed as separate one-off incidents.</span></div>
+          <div class="row"><span class="k">Record</span><span class="v">An approval/investigation entry with the underlying reconciliation attached as evidence.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="people">
+    <div class="section-head">
+      <p class="eyebrow">People</p>
+      <h2>No one person touches the whole chain</h2>
+      <p>Technology closes the gaps a determined person can't talk their way around; segregation of duties closes the ones a camera can't see.</p>
+    </div>
+    <div class="people-list">
+      <div class="item"><span class="mark">—</span><p><strong>Order, receive, and reconcile are three different people.</strong> Whoever places the fuel order never receives it, and never reconciles the books against it.</p></div>
+      <div class="item"><span class="mark">—</span><p><strong>Rotation breaks patterns.</strong> Attendants move across pumps and shifts unpredictably, so collusion has no stable pairing to settle into.</p></div>
+      <div class="item"><span class="mark">—</span><p><strong>Spot checks stay unannounced.</strong> A manager or auditor dips a tank outside the normal schedule, at random.</p></div>
+      <div class="item"><span class="mark">—</span><p><strong>Reporting doesn't route through a supervisor.</strong> Staff can flag suspected theft through a channel that bypasses the person who might be involved.</p></div>
+    </div>
+  </section>
+
+  <section id="tech">
+    <div class="section-head">
+      <p class="eyebrow">Technology</p>
+      <h2>What actually closes the gaps</h2>
+      <p>None of this replaces the people controls above — it removes the manual steps where a number could otherwise be quietly changed.</p>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-card"><div class="name">Automatic Tank Gauges</div><div class="desc">Continuous electronic level, temperature, and water-in-fuel readings, cross-checked against the manual dip rather than replacing it.</div></div>
+      <div class="tech-card"><div class="name">GPS &amp; Geofencing</div><div class="desc">Route and stop monitoring on every tanker, independent of the driver's own account of the trip.</div></div>
+      <div class="tech-card"><div class="name">Tamper-Evident Seals</div><div class="desc">Uniquely numbered; electronic variants transmit an "opened" event the instant they're broken, with time and location.</div></div>
+      <div class="tech-card"><div class="name">POS-Integrated Meters</div><div class="desc">Litres sold come straight from the pump's sealed totalizer into the sale record — never typed in by hand.</div></div>
+      <div class="tech-card"><div class="name">Timestamped CCTV</div><div class="desc">Forecourt and tank-farm footage indexed to transaction times, not just left as a general recording.</div></div>
+      <div class="tech-card"><div class="name">Centralized Reconciliation</div><div class="desc">Every station's dips, deliveries, and variances visible from one place in real time, instead of paper reports arriving days later.</div></div>
+    </div>
+  </section>
+
+  <section id="mapping">
+    <div class="section-head">
+      <p class="eyebrow">In This App</p>
+      <h2>Mapping the chain to the Fuel module</h2>
+      <p>Where each checkpoint above lives — or will live — in ADMABS.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Chain stage</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="stage-name">Depot dispatch &amp; seal log</td><td><span class="status new">New</span></td><td>Entered by the supplier or HQ the moment a tanker leaves; ties to the existing Purchase Order.</td></tr>
+          <tr><td class="stage-name">Transit tracking</td><td><span class="status new">New</span></td><td>Optional — depends on fitting tankers with GPS/telematics hardware.</td></tr>
+          <tr><td class="stage-name">Arrival &amp; seal verification</td><td><span class="status new">New</span></td><td>Seal numbers checked against the dispatch note before offload is confirmed.</td></tr>
+          <tr><td class="stage-name">Dip readings (offload + daily)</td><td><span class="status next">In app, not yet live</span></td><td>Fuel → Dip Readings already exists on sample data; next to be wired to real numbers.</td></tr>
+          <tr><td class="stage-name">Pump shift controls</td><td><span class="status next">In app, not yet live</span></td><td>Fuel → Shift already exists on sample data; next to be wired to real meter readings and cash-up.</td></tr>
+          <tr><td class="stage-name">Three-way reconciliation view</td><td><span class="status new">New</span></td><td>One screen showing dispatched vs. received vs. accounted-for, with variances surfaced automatically.</td></tr>
+          <tr><td class="stage-name">Escalation</td><td><span class="status live">Live</span></td><td>Feeds into the existing Approvals module, which already tracks status and priority.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    This is the working spec for the next phase of the Fuel Station module — every "New" row above becomes a build task.
+  </footer>
+
+</div>
