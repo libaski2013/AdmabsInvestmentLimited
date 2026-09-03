@@ -5,6 +5,7 @@ import { connectDB } from './config/db.js';
 import authPlugin from './plugins/auth.js';
 
 import authRoutes from './routes/auth.routes.js';
+import userRoutes from './routes/users.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import branchRoutes from './routes/branches.routes.js';
 import inventoryRoutes from './routes/inventory.routes.js';
@@ -25,6 +26,7 @@ await fastify.register(cors, {
 await fastify.register(authPlugin);
 
 await fastify.register(authRoutes);
+await fastify.register(userRoutes);
 await fastify.register(dashboardRoutes);
 await fastify.register(branchRoutes);
 await fastify.register(inventoryRoutes);

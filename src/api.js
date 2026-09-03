@@ -37,6 +37,8 @@ export const api = {
   me: () => request('/auth/me'),
 
   dashboard: () => request('/dashboard'),
+  branches: () => request('/branches'),
+  users: () => request('/users'),
 
   products: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
