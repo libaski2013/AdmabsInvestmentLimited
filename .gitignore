@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.local
+server/.env
+server/.mongo-data/
+*.log
+.DS_Store
+
+# Capacitor native projects are committed, but keep local build artifacts out.
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/release/
+ios/App/Pods/
+ios/App/build/
