@@ -37,6 +37,13 @@ await fastify.register(approvalRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
 
+fastify.get('/', async () => ({
+  service: 'ADMABS backend API',
+  status: 'running',
+  app: 'https://admabs-web-production.up.railway.app',
+  health: '/api/health',
+}));
+
 const port = Number(process.env.PORT) || 4000;
 fastify
   .listen({ port, host: '0.0.0.0' })
