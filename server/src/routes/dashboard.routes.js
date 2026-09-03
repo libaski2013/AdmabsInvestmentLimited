@@ -10,7 +10,14 @@ const DIVISION_MAP = {
   Service: 'Tyres & Batteries',
   Fuel: 'Fuel',
   Grocery: 'Supermarket',
+  Beverages: 'Supermarket',
+  Snacks: 'Supermarket',
+  Household: 'Supermarket',
+  Bakery: 'Supermarket',
+  Dairy: 'Supermarket',
 };
+
+export const SUPERMARKET_CATEGORIES = ['Grocery', 'Beverages', 'Snacks', 'Household', 'Bakery', 'Dairy'];
 
 function monthBounds(offsetMonths = 0) {
   const now = new Date();
