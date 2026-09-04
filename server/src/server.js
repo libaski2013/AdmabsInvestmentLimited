@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { connectDB } from './config/db.js';
 import authPlugin from './plugins/auth.js';
 
@@ -22,7 +25,7 @@ const fastify = Fastify({ logger: true });
 await connectDB(fastify.log);
 
 await fastify.register(cors, {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(value => value.trim()) : true,
 });
 await fastify.register(authPlugin);
 
@@ -40,13 +43,13 @@ await fastify.register(approvalRoutes);
 await fastify.register(accountingRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
-
-fastify.get('/', async () => ({
-  service: 'ADMABS backend API',
-  status: 'running',
-  app: 'https://admabs-web-production.up.railway.app',
-  health: '/api/health',
-}));
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const webRoot = path.resolve(currentDir, '../../../dist');
+await fastify.register(fastifyStatic, { root: webRoot, wildcard: false });
+fastify.setNotFoundHandler((request, reply) => {
+  if (request.url.startsWith('/api/')) return reply.code(404).send({ error: 'API route not found' });
+  return reply.sendFile('index.html');
+});
 
 const port = Number(process.env.PORT) || 4000;
 fastify
