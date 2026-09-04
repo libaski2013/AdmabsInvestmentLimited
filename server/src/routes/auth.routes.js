@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
+import '../models/Outlet.js';
 
 export default async function authRoutes(fastify) {
   fastify.post('/api/auth/login', async (request, reply) => {
