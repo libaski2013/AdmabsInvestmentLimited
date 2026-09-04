@@ -14,12 +14,16 @@ export default async function authRoutes(fastify) {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return reply.code(401).send({ error: 'Invalid username or password' });
 
+    const branchIds = [...new Set([user.branch, ...(user.branches || [])].filter(Boolean).map(String))];
+    const outletIds = (user.outlets || []).map(String);
     const token = fastify.jwt.sign(
-      { id: user._id.toString(), role: user.role, name: user.name },
+      { id: user._id.toString(), role: user.role, name: user.name, branchIds, outletIds, permissions: user.permissions || [] },
       { expiresIn: '12h' }
     );
-
-    return { token, user: { id: user._id, name: user.name, role: user.role, username: user.username } };
+    user.lastLoginAt = new Date();
+    await user.save();
+    await user.populate([{ path: 'branches', select: 'name code divisions' }, { path: 'outlets', select: 'name code division branch' }, { path: 'branch', select: 'name code divisions' }]);
+    return { token, user: { id: user._id, name: user.name, role: user.role, username: user.username, branch: user.branch, branches: user.branches, outlets: user.outlets, permissions: user.permissions || [] } };
   });
 
   fastify.get('/api/auth/me', { preHandler: [fastify.authenticate] }, async (request) => {

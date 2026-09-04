@@ -6,6 +6,11 @@ const branchSchema = new mongoose.Schema(
     type: { type: String, required: true }, // Tyres & Batteries | Filling Station | Supermarket | Administration
     manager: { type: String },
     staffCount: { type: Number, default: 0 },
+    code: { type: String, uppercase: true, trim: true },
+    address: { type: String },
+    region: { type: String },
+    phone: { type: String },
+    divisions: [{ type: String, enum: ['tyres', 'fuel', 'supermarket', 'warehouse', 'head_office'] }],
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

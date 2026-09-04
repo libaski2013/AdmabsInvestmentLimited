@@ -37,6 +37,10 @@ export const api = {
   me: () => request('/auth/me'),
 
   dashboard: () => request('/dashboard'),
+  storeProducts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/store/products${qs ? `?${qs}` : ''}`);
+  },
   branches: () => request('/branches'),
   users: () => request('/users'),
 
@@ -69,4 +73,6 @@ export const api = {
 
   approvals: () => request('/approvals'),
   updateApproval: (id, body) => request(`/approvals/${id}`, { method: 'PATCH', body }),
+  journals: () => request('/accounting/journals'),
+  createJournal: (body) => request('/accounting/journals', { method: 'POST', body }),
 };

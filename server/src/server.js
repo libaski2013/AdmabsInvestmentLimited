@@ -15,6 +15,7 @@ import procurementRoutes from './routes/procurement.routes.js';
 import posRoutes from './routes/pos.routes.js';
 import expenseRoutes from './routes/expenses.routes.js';
 import approvalRoutes from './routes/approvals.routes.js';
+import accountingRoutes from './routes/accounting.routes.js';
 
 const fastify = Fastify({ logger: true });
 
@@ -36,6 +37,7 @@ await fastify.register(procurementRoutes);
 await fastify.register(posRoutes);
 await fastify.register(expenseRoutes);
 await fastify.register(approvalRoutes);
+await fastify.register(accountingRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
 
