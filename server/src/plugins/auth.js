@@ -19,7 +19,7 @@ export default fp(async (fastify) => {
 
   fastify.decorate('requireRole', (...roles) => {
     return async (request, reply) => {
-      if (!request.user || !roles.includes(request.user.role)) {
+      if (!request.user || (request.user.role !== 'super_admin' && !roles.includes(request.user.role))) {
         reply.code(403).send({ error: 'Forbidden' });
       }
     };
@@ -27,13 +27,13 @@ export default fp(async (fastify) => {
 
   fastify.decorate('requirePermission', (permission, ...fallbackRoles) => async (request, reply) => {
     const user = request.user;
-    if (!user || (!user.permissions?.includes(permission) && !fallbackRoles.includes(user.role))) {
+    if (!user || (user.role !== 'super_admin' && !user.permissions?.includes(permission) && !fallbackRoles.includes(user.role))) {
       return reply.code(403).send({ error: 'You do not have permission for this action' });
     }
   });
 
   fastify.decorate('scopeFilter', (request, branchField = 'branch', outletField = 'outlet') => {
-    if (['ceo', 'gm'].includes(request.user.role)) return {};
+    if (['super_admin', 'ceo', 'gm'].includes(request.user.role)) return {};
     const filter = {};
     const branchIds = request.user.branchIds || [];
     const outletIds = request.user.outletIds || [];

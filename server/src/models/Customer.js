@@ -9,6 +9,10 @@ const customerSchema = new mongoose.Schema(
     loyaltyPoints: { type: Number, default: 0 },
     visits: { type: Number, default: 0 },
     lastVisit: { type: Date },
+    email: String,
+    branch: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
+    outlet: { type: mongoose.Schema.Types.ObjectId, ref: 'Outlet', index: true },
+    active: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

@@ -8,12 +8,12 @@ import '../models/Branch.js';
 import '../models/Outlet.js';
 import '../models/User.js';
 
-const managerRoles = ['ceo', 'gm', 'branch', 'sub_manager'];
+const managerRoles = ['super_admin', 'ceo', 'gm', 'branch', 'sub_manager'];
 const makeNumber = prefix => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 const round = value => Math.round(Number(value || 0) * 100) / 100;
 
 function requestedScope(request, body = {}) {
-  const global = ['ceo', 'gm'].includes(request.user.role);
+  const global = ['super_admin', 'ceo', 'gm'].includes(request.user.role);
   const branch = body.branch || request.user.branchIds?.[0];
   const outlet = body.outlet || request.user.outletIds?.[0] || undefined;
   if (!branch) throw new Error('Select a branch before saving this record');

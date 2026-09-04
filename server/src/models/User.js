@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const ROLES = ['ceo', 'gm', 'finance', 'accountant', 'branch', 'sub_manager', 'staff', 'cashier', 'fuel', 'storekeeper', 'procurement', 'technician', 'auditor'];
+const ROLES = ['super_admin', 'ceo', 'gm', 'finance', 'accountant', 'branch', 'sub_manager', 'staff', 'cashier', 'fuel', 'storekeeper', 'procurement', 'technician', 'auditor'];
 
 const userSchema = new mongoose.Schema(
   {

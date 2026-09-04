@@ -20,6 +20,9 @@ const productSchema = new mongoose.Schema(
       batteryType: String, warrantyMonths: Number, serialTracked: Boolean,
     },
     icon: { type: String, default: '📦' },
+    imageUrl: String,
+    websiteVisible: { type: Boolean, default: true },
+    description: String,
     active: { type: Boolean, default: true },
   },
   { timestamps: true }
