@@ -19,6 +19,7 @@ import posRoutes from './routes/pos.routes.js';
 import expenseRoutes from './routes/expenses.routes.js';
 import approvalRoutes from './routes/approvals.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
+import fuelRoutes from './routes/fuel.routes.js';
 
 const fastify = Fastify({ logger: true });
 
@@ -41,6 +42,7 @@ await fastify.register(posRoutes);
 await fastify.register(expenseRoutes);
 await fastify.register(approvalRoutes);
 await fastify.register(accountingRoutes);
+await fastify.register(fuelRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
