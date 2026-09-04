@@ -9,8 +9,8 @@ export default async function expenseRoutes(fastify) {
     const isCompanyWide = ['super_admin', 'ceo', 'gm'].includes(request.user.role);
     const branchRef = isCompanyWide ? (request.body?.branchRef || request.user.branchIds?.[0]) : request.user.branchIds?.[0];
     const outlet = isCompanyWide ? (request.body?.outlet || request.user.outletIds?.[0]) : request.user.outletIds?.[0];
-    if (!branchRef || !outlet) return reply.code(400).send({ error: 'A branch and outlet assignment are required' });
-    const expense = await Expense.create({ ...request.body, branchRef, outlet, submittedBy: request.user.name });
+    if (!isCompanyWide && (!branchRef || !outlet)) return reply.code(400).send({ error: 'A branch and outlet assignment are required' });
+    const expense = await Expense.create({ ...request.body, branchRef: branchRef || undefined, outlet: outlet || undefined, submittedBy: request.user.name });
     return reply.code(201).send(expense);
   });
 

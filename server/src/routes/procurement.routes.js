@@ -20,14 +20,14 @@ export default async function procurementRoutes(fastify) {
     const isCompanyWide = ['super_admin', 'ceo', 'gm'].includes(request.user.role);
     const branch = isCompanyWide ? (request.body?.branch || request.user.branchIds?.[0]) : request.user.branchIds?.[0];
     const outlet = isCompanyWide ? (request.body?.outlet || request.user.outletIds?.[0]) : request.user.outletIds?.[0];
-    if (!branch || !outlet) return reply.code(400).send({ error: 'A branch and outlet assignment are required' });
+    if (!isCompanyWide && (!branch || !outlet)) return reply.code(400).send({ error: 'A branch and outlet assignment are required' });
     const po = await PurchaseOrder.create({
       poNumber: await nextPoNumber(),
       supplier,
       items,
       amount,
-      branch,
-      outlet,
+      branch: branch || undefined,
+      outlet: outlet || undefined,
     });
     return reply.code(201).send(po);
   });
