@@ -44,7 +44,7 @@ await fastify.register(accountingRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const webRoot = path.resolve(currentDir, '../../../dist');
+const webRoot = path.resolve(currentDir, '../../dist');
 await fastify.register(fastifyStatic, { root: webRoot, wildcard: false });
 fastify.setNotFoundHandler((request, reply) => {
   if (request.url.startsWith('/api/')) return reply.code(404).send({ error: 'API route not found' });
