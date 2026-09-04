@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import StockMovement from '../models/StockMovement.js';
 
 export default async function inventoryRoutes(fastify) {
   fastify.get('/api/store/products', async (request) => {
@@ -16,6 +17,35 @@ export default async function inventoryRoutes(fastify) {
     let products = await Product.find(filter).sort({ name: 1 }).lean();
     if (low === 'true') products = products.filter((p) => p.qty <= p.reorderLevel);
     return products;
+  });
+
+  fastify.get('/api/products/scan/:code', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const code = decodeURIComponent(request.params.code).trim();
+    const product = await Product.findOne({ active: true, ...fastify.scopeFilter(request), $or: [{ barcode: code }, { qrCode: code }, { code }] }).lean();
+    if (!product) return reply.code(404).send({ error: 'No product matches this barcode or QR code in your assigned outlet' });
+    return product;
+  });
+
+  fastify.get('/api/stock-movements', { preHandler: [fastify.authenticate] }, async request =>
+    StockMovement.find(fastify.scopeFilter(request)).populate('product', 'code name barcode qrCode').populate('createdBy', 'name').sort({ createdAt: -1 }).limit(200));
+
+  fastify.post('/api/products/:id/stock', {
+    preHandler: [fastify.authenticate, fastify.requirePermission('inventory.update', 'ceo', 'gm', 'branch', 'sub_manager', 'storekeeper')],
+  }, async (request, reply) => {
+    const quantity = Number(request.body?.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) return reply.code(400).send({ error: 'Received quantity must be greater than zero' });
+    const product = await Product.findOne({ _id: request.params.id, active: true, ...fastify.scopeFilter(request) });
+    if (!product) return reply.code(404).send({ error: 'Product not found in your assigned outlet' });
+    const quantityBefore = product.qty;
+    product.qty += quantity;
+    await product.save();
+    const movement = await StockMovement.create({
+      number: `GRN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      product: product._id, branch: product.branch, outlet: product.outlet, type: 'receipt', quantity,
+      quantityBefore, quantityAfter: product.qty, reference: request.body?.reference, notes: request.body?.notes,
+      createdBy: request.user.id,
+    });
+    return reply.code(201).send({ product, movement });
   });
 
   fastify.post(

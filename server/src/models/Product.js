@@ -12,6 +12,7 @@ const productSchema = new mongoose.Schema(
     branch: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
     outlet: { type: mongoose.Schema.Types.ObjectId, ref: 'Outlet', index: true },
     barcode: { type: String, trim: true },
+    qrCode: { type: String, trim: true },
     unit: { type: String, default: 'each' },
     attributes: {
       brand: String, model: String, tyreSize: String, width: Number, profile: Number,

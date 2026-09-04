@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer,
@@ -98,6 +98,16 @@ const Modal = ({ title, onClose, children, wide }) => (
     </div>
   </div>
 );
+
+function CodeScanner({ title = 'Scan Barcode or QR Code', onDetected, onClose }) {
+  const videoRef = useRef(null); const streamRef = useRef(null); const frameRef = useRef(null);
+  const [manual,setManual]=useState(''); const [cameraError,setCameraError]=useState(''); const [scanning,setScanning]=useState(false);
+  const stop=()=>{if(frameRef.current)cancelAnimationFrame(frameRef.current);streamRef.current?.getTracks().forEach(t=>t.stop());streamRef.current=null;};
+  useEffect(()=>stop,[]);
+  const accept=code=>{if(!code)return;stop();onDetected(String(code).trim());};
+  const start=async()=>{setCameraError('');if(!('BarcodeDetector'in window)){setCameraError('Camera barcode detection is not supported by this browser. Use a USB scanner or enter the code below.');return}try{const detector=new window.BarcodeDetector({formats:['qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e']});const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});streamRef.current=stream;setScanning(true);await new Promise(resolve=>requestAnimationFrame(resolve));videoRef.current.srcObject=stream;await videoRef.current.play();const scan=async()=>{try{const codes=await detector.detect(videoRef.current);if(codes[0]?.rawValue){accept(codes[0].rawValue);return}}catch{}frameRef.current=requestAnimationFrame(scan)};scan()}catch(e){setCameraError(e.message||'Camera permission was not granted.')}};
+  return <Modal title={title} onClose={()=>{stop();onClose()}}><div className="space-y-4"><div className="rounded-xl overflow-hidden bg-slate-950 min-h-48 grid place-items-center">{scanning?<video ref={videoRef} className="w-full h-64 object-cover" muted playsInline/>:<div className="text-center p-6"><Search className="text-blue-300 mx-auto" size={38}/><p className="text-white text-sm font-bold mt-3">Use the device camera to scan</p><button onClick={start} className="mt-4 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">Start camera scanner</button></div>}</div>{cameraError&&<p className="text-xs text-orange-700 bg-orange-50 p-3 rounded-xl">{cameraError}</p>}<form onSubmit={e=>{e.preventDefault();accept(manual)}} className="flex gap-2"><input autoFocus value={manual} onChange={e=>setManual(e.target.value)} placeholder="Scan with USB reader or enter code" className="flex-1 border rounded-xl px-3 py-2.5 text-sm"/><button className="px-4 bg-blue-900 text-white rounded-xl text-xs font-black">Find</button></form><p className="text-xs text-gray-400">USB and Bluetooth scanners work automatically as keyboard input. Camera scanning supports QR, EAN, UPC, Code 39 and Code 128 formats.</p></div></Modal>;
+}
 
 const Tabs = ({ tabs, active, onChange }) => (
   <div className="flex flex-wrap gap-1.5">
@@ -227,7 +237,7 @@ function usePos(categoryFilter) {
   const [done, setDone] = useState(null);
 
   useEffect(() => {
-    api.products().then(list => setCatalog(list.filter(categoryFilter).map(p => ({ id: p._id, n: p.name, price: p.price, cat: p.category, icon: p.icon }))))
+    api.products().then(list => setCatalog(list.filter(categoryFilter).map(p => ({ id: p._id, n: p.name, price: p.price, cat: p.category, icon: p.icon, code: p.code, barcode: p.barcode, qrCode: p.qrCode, available: p.qty }))))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -254,6 +264,7 @@ function PosPanel({ title, color, categoryFilter, categories }) {
   const [cat, setCat] = useState('All');
   const [search, setSearch] = useState('');
   const [payMethod, setPayMethod] = useState('Cash');
+  const [scanner,setScanner]=useState(false); const [scanError,setScanError]=useState('');
   const filtered = pos.catalog.filter(p => (cat === 'All' || p.cat === cat) && (!search || p.n.toLowerCase().includes(search.toLowerCase())));
 
   if (pos.done) {
@@ -287,10 +298,8 @@ function PosPanel({ title, color, categoryFilter, categories }) {
       <div><h2 className="text-xl font-black text-blue-900">{title}</h2><p className="text-sm text-gray-500">Ring up a sale — posts straight to the real backend and updates stock.</p></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-4">
-          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-            <Search size={12} className="text-gray-400 flex-shrink-0" />
-            <input placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1 text-xs outline-none bg-transparent text-gray-700" />
-          </div>
+          <div className="flex gap-2"><div className="flex-1 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2"><Search size={12} className="text-gray-400 flex-shrink-0" /><input placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} className="flex-1 text-xs outline-none bg-transparent text-gray-700" /></div><button onClick={()=>{setScanner(true);setScanError('')}} className={`${color} text-white px-4 rounded-xl text-xs font-black`}>▣ Scan</button></div>
+          {scanError&&<p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">⚠ {scanError}</p>}
           <Tabs tabs={[{ id: 'All', label: 'All' }, ...categories.map(c => ({ id: c, label: c }))]} active={cat} onChange={setCat} />
           {pos.loading ? <p className="text-xs text-gray-400">Loading…</p> : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -344,6 +353,7 @@ function PosPanel({ title, color, categoryFilter, categories }) {
           </div>
         </div>
       </div>
+      {scanner&&<CodeScanner title={`${title} — Scan Product`} onClose={()=>setScanner(false)} onDetected={code=>{const product=pos.catalog.find(p=>[p.code,p.barcode,p.qrCode].filter(Boolean).includes(code));setScanner(false);if(!product){setScanError(`No product found for ${code} in this outlet`);return}if(product.available<=0){setScanError(`${product.n} is out of stock`);return}pos.add(product);setScanError('')}}/>}
     </div>
   );
 }
@@ -357,17 +367,19 @@ function InvView({ user }) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [edit, setEdit] = useState(null); const [form, setForm] = useState({}); const [branches, setBranches] = useState([]); const [outlets, setOutlets] = useState([]); const [err, setErr] = useState('');
+  const [scanner,setScanner]=useState(false); const [restock,setRestock]=useState(null); const [stockForm,setStockForm]=useState({quantity:'',reference:'',notes:''});
   const load = () => api.products().then(setProducts).catch(e => setErr(e.message)).finally(() => setLoading(false));
   useEffect(() => { load(); Promise.all([api.branches(), api.outlets()]).then(([b,o]) => { setBranches(b); setOutlets(o); }).catch(() => {}); }, []);
   const canEdit = ['ceo','gm','branch','sub_manager','storekeeper'].includes(user?.role) || user?.permissions?.includes('inventory.update');
-  const save = async e => { e.preventDefault(); setErr(''); try { const body = { ...form, qty: Number(form.qty), reorderLevel: Number(form.reorderLevel), price: Number(form.price), cost: Number(form.cost), websiteVisible: form.websiteVisible !== false }; edit === 'new' ? await api.createProduct(body) : await api.updateProduct(edit._id, body); setEdit(null); await load(); } catch (x) { setErr(x.message); } };
+  const save = async e => { e.preventDefault(); setErr(''); try { const body = { ...form, barcode: form.barcode || form.code, qrCode: form.qrCode || form.code, qty: Number(form.qty), reorderLevel: Number(form.reorderLevel), price: Number(form.price), cost: Number(form.cost), websiteVisible: form.websiteVisible !== false }; edit === 'new' ? await api.createProduct(body) : await api.updateProduct(edit._id, body); setEdit(null); await load(); } catch (x) { setErr(x.message); } };
+  const handleStockScan = async code => { setScanner(false); try { const product = await api.scanProduct(code); setRestock(product); setStockForm({ quantity:'', reference:'', notes:'' }); } catch { setEdit('new'); setForm({ code, barcode:code, qrCode:code, category:'Grocery', qty:0, reorderLevel:5, price:0, cost:0, websiteVisible:false }); setErr('Code is new. Complete the product details to register it.'); } };
   const low = products.filter(p => p.qty <= p.reorderLevel);
   const filtered = filter === 'low' ? low : products;
   const stockValue = products.reduce((s, p) => s + p.qty * (p.cost || 0), 0);
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Inventory</h2><p className="text-sm text-gray-500">Stock is isolated by branch and outlet; website availability updates after every sale</p></div>{canEdit && <button onClick={() => { setEdit('new'); setForm({ category:'Tyre', qty:0, reorderLevel:5, price:0, cost:0, websiteVisible:true }); }} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Add Product</button>}</div>
+      <div className="flex justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Inventory</h2><p className="text-sm text-gray-500">Stock is isolated by branch and outlet; website availability updates after every sale</p></div>{canEdit && <div className="flex gap-2"><button onClick={()=>setScanner(true)} className="px-4 py-2 border border-blue-200 text-blue-900 rounded-xl text-xs font-black">▣ Scan to Stock</button><button onClick={() => { setEdit('new'); setForm({ category:'Tyre', qty:0, reorderLevel:5, price:0, cost:0, websiteVisible:true }); }} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Add Product</button></div>}</div>
       {err && <p className="text-xs text-red-600">⚠ {err}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Total SKUs" val={String(products.length)} Ic={Package} bg="bg-blue-900" />
@@ -400,6 +412,8 @@ function InvView({ user }) {
         </div>
       )}
       {edit && <Modal title={edit === 'new' ? 'Add Inventory Item' : 'Edit Inventory Item'} wide onClose={() => setEdit(null)}><form onSubmit={save} className="space-y-3"><div className="grid md:grid-cols-2 gap-3"><label className="text-xs font-bold text-gray-500">Code<input required value={form.code || ''} onChange={e=>setForm({...form,code:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="text-xs font-bold text-gray-500">Product name<input required value={form.name || ''} onChange={e=>setForm({...form,name:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="text-xs font-bold text-gray-500">Category<select value={form.category || 'Tyre'} onChange={e=>setForm({...form,category:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['Tyre','Rim','Battery','Lubricant','Grocery','Beverages','Snacks','Household','Bakery','Dairy','Service'].map(x=><option key={x}>{x}</option>)}</select></label><label className="text-xs font-bold text-gray-500">Branch<select required value={form.branch || ''} onChange={e=>setForm({...form,branch:e.target.value,outlet:''})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Select branch</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select></label><label className="text-xs font-bold text-gray-500">Outlet / shop<select value={form.outlet || ''} onChange={e=>setForm({...form,outlet:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Branch-level stock</option>{outlets.filter(o => !form.branch || (o.branch?._id || o.branch) === form.branch).map(o=><option key={o._id} value={o._id}>{o.name} · {o.division}</option>)}</select></label>{[['qty','Quantity'],['reorderLevel','Reorder level'],['cost','Unit cost'],['price','Selling price']].map(([k,l])=><label key={k} className="text-xs font-bold text-gray-500">{l}<input type="number" min="0" step="0.01" value={form[k] ?? ''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label>)}</div><label className="block text-xs font-bold text-gray-500">Description<textarea value={form.description || ''} onChange={e=>setForm({...form,description:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="block text-xs font-bold text-gray-500">Product image URL or data image<input value={form.imageUrl || ''} onChange={e=>setForm({...form,imageUrl:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={form.websiteVisible !== false} onChange={e=>setForm({...form,websiteVisible:e.target.checked})} /> Show this item on the public website</label><button className="w-full bg-red-600 text-white rounded-xl py-3 font-black text-sm">Save inventory record</button>{edit !== 'new' && user?.role === 'ceo' && <button type="button" onClick={async()=>{if(confirm('Archive this product and remove it from the website?')){await api.deleteProduct(edit._id);setEdit(null);load();}}} className="w-full text-red-600 text-xs font-bold">Archive product</button>}</form></Modal>}
+      {scanner&&<CodeScanner title="Scan Product for Stock Receipt" onClose={()=>setScanner(false)} onDetected={handleStockScan}/>}
+      {restock&&<Modal title={`Receive Stock — ${restock.name}`} onClose={()=>setRestock(null)}><form onSubmit={async e=>{e.preventDefault();try{await api.receiveProductStock(restock._id,{...stockForm,quantity:Number(stockForm.quantity)});setRestock(null);await load()}catch(x){setErr(x.message)}}} className="space-y-3"><div className="bg-blue-50 rounded-xl p-3 text-sm"><b>{restock.code}</b><span className="text-gray-500"> · Current stock: {restock.qty}</span><p className="text-xs mt-1">Barcode: {restock.barcode||'—'} · QR: {restock.qrCode||'—'}</p></div><label className="block text-xs font-bold text-gray-500">Quantity received<input autoFocus required type="number" min="1" value={stockForm.quantity} onChange={e=>setStockForm({...stockForm,quantity:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><label className="block text-xs font-bold text-gray-500">Delivery note / GRN reference<input value={stockForm.reference} onChange={e=>setStockForm({...stockForm,reference:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><label className="block text-xs font-bold text-gray-500">Notes<textarea value={stockForm.notes} onChange={e=>setStockForm({...stockForm,notes:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><button className="w-full py-3 bg-green-600 text-white rounded-xl font-black">Receive and update stock</button></form></Modal>}
     </div>
   );
 }
