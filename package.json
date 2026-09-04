@@ -2,6 +2,7 @@
   "name": "admabs-investment",
   "private": true,
   "version": "0.0.1",
+  "engines": { "node": ">=18 <19" },
   "type": "module",
   "scripts": {
     "dev": "vite",
