@@ -727,14 +727,89 @@ function RepView() {
   );
 }
 
-// ─── FUEL (not yet backed by real tank/pump data — honest placeholder) ───
-function FuelView() {
+// ─── FUEL STATION ───
+function FuelView({ user }) {
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [action, setAction] = useState(null);
+  const [form, setForm] = useState({});
+  const [branches, setBranches] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const canManage = ['ceo', 'gm', 'branch', 'sub_manager'].includes(user?.role);
+  const load = () => api.fuelOverview().then(setData).catch(e => setError(e.message));
+  useEffect(() => { load(); api.branches().then(setBranches).catch(() => {}); }, []);
+  const m = data?.metrics || {};
+  const input = (key, label, type = 'text', extra = {}) => (
+    <label className="block"><span className="block text-xs font-bold text-gray-500 mb-1">{label}</span><input type={type} value={form[key] ?? ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500" {...extra} /></label>
+  );
+  const select = (key, label, options) => (
+    <label className="block"><span className="block text-xs font-bold text-gray-500 mb-1">{label}</span><select value={form[key] || ''} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white"><option value="">Select…</option>{options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+  );
+  const openAction = (type, defaults = {}) => { setAction(type); setForm(defaults); setError(''); setNotice(''); };
+  const save = async e => {
+    e.preventDefault(); setBusy(true); setError('');
+    try {
+      if (action === 'tank') await api.createFuelTank({ ...form, capacityLitres: Number(form.capacityLitres), currentLitres: Number(form.currentLitres), reorderLevelLitres: Number(form.reorderLevelLitres) });
+      if (action === 'pump') await api.createFuelPump({ ...form, pricePerLitre: Number(form.pricePerLitre), nozzles: [{ code: form.nozzleCode, label: form.nozzleLabel || form.nozzleCode, meterReading: Number(form.meterReading) }] });
+      if (action === 'open') await api.openFuelShift({ ...form, openingMeter: Number(form.openingMeter) });
+      if (action === 'close') await api.closeFuelShift(form.id, { closingMeter: Number(form.closingMeter), testLitres: Number(form.testLitres), varianceReason: form.varianceReason, payments: { cash: Number(form.cash), card: Number(form.card), mobileMoney: Number(form.mobileMoney), credit: Number(form.credit) } });
+      if (action === 'dip') await api.createFuelDip({ ...form, closingDipLitres: Number(form.closingDipLitres), waterLevelMm: Number(form.waterLevelMm), temperatureC: form.temperatureC === '' ? undefined : Number(form.temperatureC) });
+      if (action === 'delivery') await api.createFuelDelivery({ ...form, orderedLitres: Number(form.orderedLitres), dispatchedLitres: Number(form.dispatchedLitres), receivedLitres: Number(form.receivedLitres), sealNumbers: String(form.sealNumbers || '').split(',').map(x => x.trim()).filter(Boolean), sealsIntact: form.sealsIntact !== 'false' });
+      setAction(null); setNotice('Record saved successfully'); await load();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+  const review = async (kind, id, status) => {
+    setBusy(true); setError('');
+    try { kind === 'shift' ? await api.reviewFuelShift(id, { status }) : await api.reviewFuelDip(id, { status }); setNotice(`Record ${status}`); await load(); }
+    catch (err) { setError(err.message); } finally { setBusy(false); }
+  };
+  const tanks = data?.tanks || [], pumps = data?.pumps || [], shifts = data?.shifts || [], dips = data?.dips || [], deliveries = data?.deliveries || [];
+  const pct = tank => Math.min(100, Math.max(0, tank.capacityLitres ? tank.currentLitres / tank.capacityLitres * 100 : 0));
+  const date = value => value ? new Date(value).toLocaleString() : '—';
+  const statusColor = s => s === 'approved' || s === 'active' ? 'green' : s === 'queried' || s === 'offline' ? 'red' : s === 'open' ? 'blue' : 'orange';
+  const empty = text => <div className="bg-white border border-dashed border-gray-200 rounded-xl p-8 text-center text-sm text-gray-400">{text}</div>;
+
   return (
-    <div className="flex flex-col items-center justify-center h-80 text-center">
-      <div className="w-16 h-16 bg-red-700 rounded-2xl flex items-center justify-center mb-4 shadow-lg"><Fuel size={28} className="text-white" /></div>
-      <h2 className="text-xl font-black text-gray-800">Fuel Station Operations</h2>
-      <p className="text-sm text-gray-400 mt-2 max-w-sm">Tank dips, pump shifts and reconciliation exist in the mobile app on sample data today — wiring them to real numbers here is next up.</p>
-      <Bd label="Coming Next" v="orange" />
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-xl font-black text-blue-900">Fuel Station Operations</h2><p className="text-sm text-gray-500">Pump custody, wet stock, deliveries and daily reconciliation</p></div>
+        <div className="flex gap-2"><button onClick={load} className="px-3 py-2 text-xs font-bold border rounded-xl bg-white">Refresh</button><button onClick={() => openAction('open')} disabled={!pumps.length} className="px-3 py-2 text-xs font-black rounded-xl bg-red-600 text-white disabled:opacity-40">+ Open Shift</button></div>
+      </div>
+      {error && <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl p-3">⚠ {error}</div>}
+      {notice && <div className="bg-green-50 border border-green-200 text-green-700 text-xs rounded-xl p-3">✓ {notice}</div>}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <Kpi label="Fuel on Hand" val={`${Number(m.litresOnHand || 0).toLocaleString()} L`} sub={`${m.lowTanks || 0} tanks below reorder`} Ic={Fuel} bg="bg-blue-900" />
+        <Kpi label="Sold Today" val={`${Number(m.litresSoldToday || 0).toLocaleString()} L`} sub="Closed pump shifts" Ic={TrendingUp} bg="bg-blue-700" />
+        <Kpi label="Expected Revenue" val={fmt(m.expectedRevenueToday)} sub="Meter-derived" Ic={DollarSign} bg="bg-blue-600" />
+        <Kpi label="Collection Variance" val={fmt(m.collectionVarianceToday)} sub="Actual less expected" pos={m.collectionVarianceToday >= 0} Ic={AlertTriangle} bg="bg-red-600" />
+        <Kpi label="Open Shifts" val={m.openShifts || 0} sub="Nozzles in custody" Ic={UserCheck} bg="bg-slate-700" />
+      </div>
+      <Tabs active={tab} onChange={setTab} tabs={[{ id: 'overview', label: 'Overview' }, { id: 'shifts', label: 'Pump Shifts' }, { id: 'dips', label: 'Tank Dips' }, { id: 'deliveries', label: 'Deliveries' }, { id: 'setup', label: 'Tanks & Pumps' }]} />
+
+      {tab === 'overview' && <div className="grid lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-xl border shadow-sm p-4"><div className="flex justify-between mb-3"><h3 className="font-black text-gray-800">Tank Levels</h3><button onClick={() => openAction('dip')} disabled={!tanks.length} className="text-xs font-bold text-blue-700 disabled:opacity-40">Record dip</button></div>{tanks.length ? <div className="space-y-4">{tanks.map(t => <div key={t._id}><div className="flex justify-between text-xs mb-1"><span className="font-bold">{t.code} · {t.name} <span className="text-gray-400 uppercase">{t.product}</span></span><span>{Number(t.currentLitres).toLocaleString()} / {Number(t.capacityLitres).toLocaleString()} L</span></div><div className="h-2.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${pct(t) <= 20 ? 'bg-red-600' : 'bg-blue-700'}`} style={{ width: `${pct(t)}%` }} /></div></div>)}</div> : <p className="text-sm text-gray-400 py-5 text-center">No tanks configured.</p>}</div>
+        <div className="bg-white rounded-xl border shadow-sm p-4"><h3 className="font-black text-gray-800 mb-3">Controls Requiring Attention</h3><div className="space-y-2">{shifts.filter(s => ['open', 'submitted', 'queried'].includes(s.status)).slice(0, 6).map(s => <div key={s._id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3"><div><p className="text-xs font-bold">{s.number} · {s.pump?.name}</p><p className="text-xs text-gray-400">{s.attendant?.name} · {date(s.openedAt)}</p></div><Bd label={s.status} v={statusColor(s.status)} /></div>)}{!shifts.some(s => ['open', 'submitted', 'queried'].includes(s.status)) && <p className="text-sm text-gray-400 py-5 text-center">No open controls or pending reviews.</p>}</div></div>
+      </div>}
+
+      {tab === 'shifts' && (shifts.length ? <div className="bg-white rounded-xl border shadow-sm overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Shift / Pump','Attendant','Meter','Litres','Expected','Collected','Variance','Status','Action'].map(h => <th key={h} className="px-3 py-3 text-left text-gray-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{shifts.map(s => <tr key={s._id}><td className="px-3 py-3 font-bold">{s.number}<br/><span className="text-gray-400">{s.pump?.code} / {s.nozzleCode}</span></td><td className="px-3">{s.attendant?.name}</td><td className="px-3">{s.openingMeter} → {s.closingMeter ?? 'Open'}</td><td className="px-3 font-bold">{s.litresSold || 0} L</td><td className="px-3">{fmt(s.expectedAmount)}</td><td className="px-3">{fmt(s.actualCollected)}</td><td className={`px-3 font-bold ${s.cashVariance < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(s.cashVariance)}</td><td className="px-3"><Bd label={s.status} v={statusColor(s.status)} /></td><td className="px-3"><div className="flex gap-1">{s.status === 'open' && <button onClick={() => openAction('close', { id: s._id, closingMeter: s.openingMeter, testLitres: 0, cash: 0, card: 0, mobileMoney: 0, credit: 0 })} className="text-blue-700 font-bold">Close</button>}{canManage && s.status === 'submitted' && <><button disabled={busy} onClick={() => review('shift', s._id, 'approved')} className="text-green-700 font-bold">Approve</button><button disabled={busy} onClick={() => review('shift', s._id, 'queried')} className="text-red-600 font-bold">Query</button></>}</div></td></tr>)}</tbody></table></div> : empty('No pump shifts recorded yet.'))}
+
+      {tab === 'dips' && <div className="space-y-3"><div className="flex justify-end"><button onClick={() => openAction('dip')} disabled={!tanks.length} className="px-3 py-2 text-xs font-black bg-blue-900 text-white rounded-xl disabled:opacity-40">+ Record Dip</button></div>{dips.length ? <div className="bg-white rounded-xl border shadow-sm overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Dip','Tank','Measured','Book Closing','Actual Dip','Variance','Status','Review'].map(h => <th key={h} className="px-3 py-3 text-left text-gray-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{dips.map(d => <tr key={d._id}><td className="px-3 py-3 font-bold">{d.number}</td><td className="px-3">{d.tank?.code} · {d.tank?.product}</td><td className="px-3">{date(d.measuredAt)}</td><td className="px-3">{d.theoreticalClosingLitres} L</td><td className="px-3 font-bold">{d.closingDipLitres} L</td><td className={`px-3 font-bold ${Math.abs(d.variancePercent) > 0.5 ? 'text-red-600' : 'text-green-600'}`}>{d.varianceLitres} L ({d.variancePercent}%)</td><td className="px-3"><Bd label={d.status} v={statusColor(d.status)} /></td><td className="px-3">{canManage && d.status === 'pending' && <div className="flex gap-2"><button onClick={() => review('dip', d._id, 'approved')} className="text-green-700 font-bold">Approve</button><button onClick={() => review('dip', d._id, 'queried')} className="text-red-600 font-bold">Query</button></div>}</td></tr>)}</tbody></table></div> : empty('No tank dips recorded yet.')}</div>}
+
+      {tab === 'deliveries' && <div className="space-y-3"><div className="flex justify-end"><button onClick={() => openAction('delivery')} disabled={!tanks.length} className="px-3 py-2 text-xs font-black bg-blue-900 text-white rounded-xl disabled:opacity-40">+ Receive Delivery</button></div>{deliveries.length ? <div className="bg-white rounded-xl border shadow-sm overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Receipt','Tank','Supplier / Note','Dispatched','Received','Variance','Seals','Date'].map(h => <th key={h} className="px-3 py-3 text-left text-gray-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{deliveries.map(d => <tr key={d._id}><td className="px-3 py-3 font-bold">{d.number}</td><td className="px-3">{d.tank?.code}</td><td className="px-3">{d.supplier}<br/><span className="text-gray-400">{d.deliveryNote}</span></td><td className="px-3">{d.dispatchedLitres} L</td><td className="px-3 font-bold">{d.receivedLitres} L</td><td className={d.varianceLitres < 0 ? 'px-3 text-red-600 font-bold' : 'px-3'}>{d.varianceLitres} L</td><td className="px-3"><Bd label={d.sealsIntact ? 'Intact' : 'Broken'} v={d.sealsIntact ? 'green' : 'red'} /></td><td className="px-3">{date(d.receivedAt)}</td></tr>)}</tbody></table></div> : empty('No fuel deliveries recorded yet.')}</div>}
+
+      {tab === 'setup' && <div className="space-y-4"><div className="flex justify-end gap-2">{canManage && <><button onClick={() => openAction('tank')} className="px-3 py-2 text-xs font-bold border border-blue-200 text-blue-800 rounded-xl">+ Tank</button><button onClick={() => openAction('pump')} disabled={!tanks.length} className="px-3 py-2 text-xs font-black bg-blue-900 text-white rounded-xl disabled:opacity-40">+ Pump</button></>}</div><div className="grid lg:grid-cols-2 gap-5"><div className="bg-white border rounded-xl p-4"><h3 className="font-black mb-3">Tanks</h3>{tanks.map(t => <div key={t._id} className="flex justify-between py-2 border-b text-xs"><span className="font-bold">{t.code} · {t.name}</span><span>{t.product.toUpperCase()} · {t.capacityLitres.toLocaleString()} L</span></div>)}{!tanks.length && <p className="text-sm text-gray-400">No tanks configured.</p>}</div><div className="bg-white border rounded-xl p-4"><h3 className="font-black mb-3">Pumps & Nozzles</h3>{pumps.map(p => <div key={p._id} className="flex justify-between py-2 border-b text-xs"><span className="font-bold">{p.code} · {p.name}</span><span>{p.nozzles.map(n => `${n.code}: ${n.meterReading} L`).join(', ')} · {fmt(p.pricePerLitre)}/L</span></div>)}{!pumps.length && <p className="text-sm text-gray-400">No pumps configured.</p>}</div></div></div>}
+
+      {action && <Modal title={{ tank: 'Add Fuel Tank', pump: 'Add Pump & Nozzle', open: 'Open Pump Shift', close: 'Close & Reconcile Shift', dip: 'Record Tank Dip', delivery: 'Receive Fuel Delivery' }[action]} onClose={() => setAction(null)}><form onSubmit={save} className="space-y-3">
+        {action === 'tank' && <>{select('branch', 'Branch', branches.map(b => ({ value: b._id, label: `${b.name} · ${b.type}` })))}<div className="grid grid-cols-2 gap-3">{input('code','Tank code')}{input('name','Tank name')}</div>{select('product','Product',[{value:'petrol',label:'Petrol'},{value:'diesel',label:'Diesel'},{value:'premium',label:'Premium'},{value:'lpg',label:'LPG'}])}<div className="grid grid-cols-3 gap-3">{input('capacityLitres','Capacity (L)','number',{min:1})}{input('currentLitres','Opening stock (L)','number',{min:0})}{input('reorderLevelLitres','Reorder level (L)','number',{min:0})}</div></>}
+        {action === 'pump' && <>{select('tank','Supply tank',tanks.map(t => ({value:t._id,label:`${t.code} · ${t.name}`})))}<div className="grid grid-cols-2 gap-3">{input('code','Pump code')}{input('name','Pump name')}</div>{input('pricePerLitre','Selling price / litre','number',{min:0,step:'0.01'})}<div className="grid grid-cols-3 gap-3">{input('nozzleCode','Nozzle code')}{input('nozzleLabel','Nozzle label')}{input('meterReading','Opening totalizer','number',{min:0,step:'0.01'})}</div></>}
+        {action === 'open' && <>{select('pump','Pump',pumps.filter(p => p.status === 'active').map(p => ({value:p._id,label:`${p.code} · ${p.name} (${p.product})`})))}{select('nozzleCode','Nozzle',pumps.find(p => p._id === form.pump)?.nozzles.filter(n => n.active).map(n => ({value:n.code,label:`${n.label} · saved meter ${n.meterReading}`})) || [])}{input('openingMeter','Verified opening meter','number',{min:0,step:'0.01'})}{input('notes','Handover notes')}</>}
+        {action === 'close' && <><div className="grid grid-cols-2 gap-3">{input('closingMeter','Closing meter','number',{min:0,step:'0.01'})}{input('testLitres','Authorised test litres','number',{min:0,step:'0.01'})}</div><p className="text-xs font-black text-blue-900 pt-1">Collections by tender</p><div className="grid grid-cols-2 gap-3">{input('cash','Cash','number',{min:0,step:'0.01'})}{input('card','Card','number',{min:0,step:'0.01'})}{input('mobileMoney','Mobile money','number',{min:0,step:'0.01'})}{input('credit','Approved credit','number',{min:0,step:'0.01'})}</div>{input('varianceReason','Variance / handover note')}</>}
+        {action === 'dip' && <>{select('tank','Tank',tanks.map(t => ({value:t._id,label:`${t.code} · ${t.name} · ${t.currentLitres} L book stock`})))}<div className="grid grid-cols-3 gap-3">{input('closingDipLitres','Measured litres','number',{min:0,step:'0.01'})}{input('waterLevelMm','Water (mm)','number',{min:0,step:'0.1'})}{input('temperatureC','Temperature °C','number',{step:'0.1'})}</div>{input('notes','Observation / explanation')}</>}
+        {action === 'delivery' && <>{select('tank','Receiving tank',tanks.map(t => ({value:t._id,label:`${t.code} · ${t.name}`})))}<div className="grid grid-cols-2 gap-3">{input('supplier','Supplier')}{input('deliveryNote','Delivery note')}</div><div className="grid grid-cols-2 gap-3">{input('tankerRegistration','Tanker registration')}{input('driver','Driver')}</div><div className="grid grid-cols-3 gap-3">{input('orderedLitres','Ordered L','number',{min:0})}{input('dispatchedLitres','Dispatch L','number',{min:0})}{input('receivedLitres','Received L','number',{min:0})}</div>{input('sealNumbers','Seal numbers (comma separated)')}{select('sealsIntact','Seal condition',[{value:'true',label:'All seals intact'},{value:'false',label:'Broken / mismatch'}])}{input('notes','Receiving notes')}</>}
+        {error && <p className="text-xs text-red-600 font-bold">⚠ {error}</p>}<button disabled={busy} className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-sm py-3 rounded-xl">{busy ? 'Saving…' : 'Save controlled record'}</button>
+      </form></Modal>}
     </div>
   );
 }
@@ -785,7 +860,7 @@ export default function DesktopApp() {
   const renderView = () => {
     if (active === 'approvals') return <ApprovalsView onChanged={refreshApprovals} />;
     const V = SECTIONS[active];
-    return V ? <V /> : <DashView />;
+    return V ? <V user={user} /> : <DashView />;
   };
 
   return (

@@ -75,4 +75,13 @@ export const api = {
   updateApproval: (id, body) => request(`/approvals/${id}`, { method: 'PATCH', body }),
   journals: () => request('/accounting/journals'),
   createJournal: (body) => request('/accounting/journals', { method: 'POST', body }),
+  fuelOverview: () => request('/fuel/overview'),
+  createFuelTank: body => request('/fuel/tanks', { method: 'POST', body }),
+  createFuelPump: body => request('/fuel/pumps', { method: 'POST', body }),
+  openFuelShift: body => request('/fuel/shifts/open', { method: 'POST', body }),
+  closeFuelShift: (id, body) => request(`/fuel/shifts/${id}/close`, { method: 'PATCH', body }),
+  reviewFuelShift: (id, body) => request(`/fuel/shifts/${id}/review`, { method: 'PATCH', body }),
+  createFuelDip: body => request('/fuel/dips', { method: 'POST', body }),
+  reviewFuelDip: (id, body) => request(`/fuel/dips/${id}/review`, { method: 'PATCH', body }),
+  createFuelDelivery: body => request('/fuel/deliveries', { method: 'POST', body }),
 };
