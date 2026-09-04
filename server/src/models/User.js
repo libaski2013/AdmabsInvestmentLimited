@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const ROLES = ['ceo', 'gm', 'branch', 'finance', 'staff', 'fuel'];
+const ROLES = ['ceo', 'gm', 'finance', 'accountant', 'branch', 'sub_manager', 'staff', 'cashier', 'fuel', 'storekeeper', 'procurement', 'technician', 'auditor'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -9,6 +9,11 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ROLES, required: true },
     branch: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+    branches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
+    outlets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Outlet' }],
+    permissions: [{ type: String, trim: true }],
+    employeeNumber: { type: String, trim: true },
+    lastLoginAt: { type: Date },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

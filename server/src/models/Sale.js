@@ -16,6 +16,7 @@ const saleSchema = new mongoose.Schema(
   {
     invoiceNumber: { type: String, required: true, unique: true },
     branch: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+    outlet: { type: mongoose.Schema.Types.ObjectId, ref: 'Outlet', index: true },
     cashier: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
     items: [saleItemSchema],
@@ -23,7 +24,14 @@ const saleSchema = new mongoose.Schema(
     tax: { type: Number, required: true },
     total: { type: Number, required: true },
     paymentMethod: { type: String, default: 'Cash' },
-    status: { type: String, enum: ['posted', 'pending'], default: 'posted' },
+    payments: [{ method: { type: String, required: true }, amount: { type: Number, required: true }, reference: String }],
+    discount: { type: Number, default: 0 },
+    taxRate: { type: Number, default: 0.15 },
+    channel: { type: String, enum: ['pos', 'online', 'quotation'], default: 'pos' },
+    status: { type: String, enum: ['draft', 'suspended', 'posted', 'returned', 'voided'], default: 'posted' },
+    postedAt: { type: Date, default: Date.now },
+    reversalOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Sale' },
+    notes: String,
   },
   { timestamps: true }
 );

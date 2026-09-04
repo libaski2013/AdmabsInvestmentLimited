@@ -27,20 +27,22 @@ function monthBounds(offsetMonths = 0) {
 }
 
 export default async function dashboardRoutes(fastify) {
-  fastify.get('/api/dashboard', { preHandler: [fastify.authenticate] }, async () => {
+  fastify.get('/api/dashboard', { preHandler: [fastify.authenticate] }, async (request) => {
     const { start: monthStart, end: monthEnd } = monthBounds(0);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const [salesThisMonth, allSales, expensesThisMonth, customers, lowStock, pendingApprovals] =
+    const scope = fastify.scopeFilter(request);
+    const [salesThisMonth, allSales, expensesThisMonth, customers, scopedProducts, pendingApprovals] =
       await Promise.all([
-        Sale.find({ createdAt: { $gte: monthStart, $lt: monthEnd } }),
-        Sale.find().sort({ createdAt: -1 }).limit(500),
-        Expense.find({ createdAt: { $gte: monthStart, $lt: monthEnd }, status: { $ne: 'rejected' } }),
+        Sale.find({ ...scope, createdAt: { $gte: monthStart, $lt: monthEnd }, status: 'posted' }),
+        Sale.find(scope).sort({ createdAt: -1 }).limit(500),
+        Expense.find({ ...fastify.scopeFilter(request, 'branchRef', 'outlet'), createdAt: { $gte: monthStart, $lt: monthEnd }, status: { $ne: 'rejected' } }),
         Customer.find(),
-        Product.find({ active: true }).then((ps) => ps.filter((p) => p.qty <= p.reorderLevel)),
+        Product.find({ ...scope, active: true }),
         Approval.countDocuments({ status: 'pending' }),
       ]);
+    const lowStock = scopedProducts.filter(p => p.qty <= p.reorderLevel);
 
     const revenue = salesThisMonth.reduce((s, sale) => s + sale.total, 0);
     const todayRevenue = salesThisMonth
@@ -54,6 +56,14 @@ export default async function dashboardRoutes(fastify) {
     const expensesTotal = expensesThisMonth.reduce((s, e) => s + e.amount, 0);
     const netProfit = grossProfit - expensesTotal;
     const receivables = customers.reduce((s, c) => s + (c.balance || 0), 0);
+    const inventoryValue = scopedProducts.reduce((sum, p) => sum + (p.cost || 0) * (p.qty || 0), 0);
+    const paymentTotals = {};
+    const branchTotals = {};
+    for (const sale of salesThisMonth) {
+      for (const payment of sale.payments?.length ? sale.payments : [{ method: sale.paymentMethod, amount: sale.total }]) paymentTotals[payment.method] = (paymentTotals[payment.method] || 0) + payment.amount;
+      const key = String(sale.branch || 'Unassigned');
+      branchTotals[key] = (branchTotals[key] || 0) + sale.total;
+    }
 
     const divisionTotals = {};
     for (const sale of salesThisMonth) {
@@ -113,6 +123,13 @@ export default async function dashboardRoutes(fastify) {
       grossProfit: Math.round(grossProfit),
       netProfit: Math.round(netProfit),
       receivables: Math.round(receivables),
+      expenses: Math.round(expensesTotal),
+      cogs: Math.round(cogs),
+      grossMargin: revenue ? +(grossProfit / revenue * 100).toFixed(1) : 0,
+      netMargin: revenue ? +(netProfit / revenue * 100).toFixed(1) : 0,
+      inventoryValue: Math.round(inventoryValue),
+      paymentMix: Object.entries(paymentTotals).map(([name, value]) => ({ name, value: Math.round(value) })),
+      branchPerformance: Object.entries(branchTotals).map(([branch, value]) => ({ branch, value: Math.round(value) })).sort((a, b) => b.value - a.value),
       revenueByDivision,
       revenueTrend: trend,
       alerts,

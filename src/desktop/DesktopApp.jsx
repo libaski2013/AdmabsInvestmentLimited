@@ -21,6 +21,11 @@ const ROLE_CONFIG = {
   branch: { label: 'Branch Manager', desc: 'Branch POS, inventory and staff', color: 'bg-blue-600', initials: 'BM', Ic: Store, branch: 'Harare Main' },
   staff: { label: 'Sales Attendant', desc: 'Point of sale and customer operations', color: 'bg-red-600', initials: 'SA', Ic: ShoppingCart, branch: 'Harare Main' },
   fuel: { label: 'Fuel Attendant', desc: 'Fuel station operations and shifts', color: 'bg-red-700', initials: 'FA', Ic: Fuel, branch: 'Fuel Station' },
+  accountant: { label: 'Accountant', desc: 'Ledgers, journals and reconciliation', color: 'bg-purple-700', initials: 'AC', Ic: Receipt, branch: 'Head Office' },
+  sub_manager: { label: 'Sub Manager', desc: 'Assigned outlet operations', color: 'bg-blue-600', initials: 'SM', Ic: Store, branch: 'Assigned outlet' },
+  cashier: { label: 'Cashier', desc: 'POS and register closing', color: 'bg-red-600', initials: 'CA', Ic: ShoppingCart, branch: 'Assigned outlet' },
+  storekeeper: { label: 'Storekeeper', desc: 'Receiving, stock counts and transfers', color: 'bg-slate-700', initials: 'SK', Ic: Package, branch: 'Assigned outlet' },
+  auditor: { label: 'Auditor', desc: 'Read-only records and audit trail', color: 'bg-gray-700', initials: 'AU', Ic: Shield, branch: 'All assigned branches' },
 };
 
 const NAV_GROUPS = [
@@ -54,6 +59,11 @@ const ROLE_MODULES = {
   branch: ['dash', 'pos', 'mkt', 'inv', 'expenses', 'staff', 'rep'],
   staff: ['pos', 'mkt'],
   fuel: ['dash', 'fuel', 'expenses'],
+  accountant: ['dash', 'fin', 'expenses', 'cust', 'rep'],
+  sub_manager: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'expenses', 'staff', 'rep'],
+  cashier: ['pos', 'mkt'],
+  storekeeper: ['dash', 'inv', 'proc'],
+  auditor: ['dash', 'inv', 'expenses', 'fin', 'cust', 'rep'],
 };
 
 // ─── SHARED UI ───
@@ -93,26 +103,23 @@ const Tabs = ({ tabs, active, onChange }) => (
   </div>
 );
 
-const fmt = n => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const fmt = n => `GH₵ ${Number(n || 0).toLocaleString('en-GH', { maximumFractionDigits: 2 })}`;
 const initialsOf = name => (name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
 // ─── LOGIN ───
 function LoginScreen({ onLogin }) {
-  const roles = Object.entries(ROLE_CONFIG);
-  const [picked, setPicked] = useState(null);
   const [u, setU] = useState('');
   const [p, setP] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const pick = ([key]) => { setPicked(key); setU(key); setP(key); setErr(''); };
   const submit = async () => {
-    if (!picked) { setErr('Select a role first'); return; }
+    if (!u.trim() || !p) { setErr('Enter your username and password'); return; }
     setLoading(true); setErr('');
     try {
       const res = await api.login(u, p);
       setToken(res.token);
-      onLogin(res.user.role);
+      onLogin(res.user);
     } catch (e) {
       setErr(e.message || 'Login failed');
     } finally {
@@ -122,29 +129,16 @@ function LoginScreen({ onLogin }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
             <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-xl">A</div>
             <div><p className="text-white font-black text-3xl tracking-widest">ADMABS</p><p className="text-blue-300 text-xs tracking-widest">INTEGRATED BUSINESS PLATFORM</p></div>
           </div>
-          <p className="text-blue-300 text-sm mt-1">Select a role to sign in — each role determines your screens and permissions</p>
+          <p className="text-blue-200 text-sm mt-3">Secure staff access</p>
+          <p className="text-blue-400 text-xs mt-1">Your assigned role, branch and outlet will load automatically.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-          {roles.map(([key, r]) => {
-            const Ic = r.Ic;
-            const active = picked === key;
-            return (
-              <button key={key} onClick={() => pick([key, r])} className={`group text-left rounded-2xl p-4 transition-all border ${active ? 'bg-white bg-opacity-15 border-white border-opacity-40' : 'bg-white bg-opacity-5 hover:bg-opacity-10 border-white border-opacity-10'}`}>
-                <div className={`w-10 h-10 ${r.color} rounded-xl flex items-center justify-center shadow-lg mb-3`}><Ic size={17} className="text-white" /></div>
-                <p className="font-black text-white text-sm leading-tight mb-1">{r.label}</p>
-                <p className="text-blue-300 text-xs leading-relaxed mb-2">{r.desc}</p>
-                <span className="text-blue-400 text-xs flex items-center gap-1"><MapPin size={9} />{r.branch}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded-2xl p-5 space-y-3">
+        <div className="bg-white/10 backdrop-blur border border-white/15 rounded-2xl p-6 space-y-4 shadow-2xl">
           <div>
             <label className="block text-xs font-bold text-blue-300 tracking-wide mb-1">USERNAME</label>
             <input value={u} onChange={e => setU(e.target.value)} className="w-full bg-white bg-opacity-10 border border-white border-opacity-20 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-opacity-50" />
@@ -659,18 +653,21 @@ function FinView() {
       <div><h2 className="text-xl font-black text-blue-900">Finance</h2><p className="text-sm text-gray-500">Month-to-date position, from live sales and expenses</p></div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Revenue MTD" val={fmt(d?.revenue)} Ic={TrendingUp} bg="bg-blue-900" />
-        <Kpi label="Gross Profit" val={fmt(d?.grossProfit)} Ic={Wallet} bg="bg-blue-700" />
-        <Kpi label="Net Profit" val={fmt(d?.netProfit)} Ic={Star} bg="bg-blue-600" />
-        <Kpi label="Receivables" val={fmt(d?.receivables)} pos={false} Ic={DollarSign} bg="bg-red-600" />
+        <Kpi label="Gross Profit" val={fmt(d?.grossProfit)} sub={`${d?.grossMargin || 0}% margin`} pos={true} Ic={Wallet} bg="bg-blue-700" />
+        <Kpi label="Net Profit" val={fmt(d?.netProfit)} sub={`${d?.netMargin || 0}% margin`} pos={true} Ic={Star} bg="bg-blue-600" />
+        <Kpi label="Inventory at Cost" val={fmt(d?.inventoryValue)} Ic={Package} bg="bg-red-600" />
       </div>
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-50">
-        <div className="px-5 py-2.5 bg-blue-900 flex justify-between text-xs font-black text-white"><span>REVENUE BY DIVISION</span><span>{fmt(d?.revenue)}</span></div>
-        {(d?.revenueByDivision || []).map((x, i) => (
-          <div key={i} className="px-5 py-2.5 flex justify-between text-xs pl-10"><span className="text-gray-500">{x.n}</span><span className="font-semibold">{fmt(x.v)}</span></div>
-        ))}
-        <div className="px-5 py-3 bg-green-50 flex justify-between text-sm font-black"><span className="text-green-900">NET PROFIT</span><span className="text-green-800">{fmt(d?.netProfit)}</span></div>
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-50">
+          <div className="px-5 py-3 bg-blue-900 flex justify-between text-xs font-black text-white"><span>MANAGEMENT PROFIT & LOSS</span><span>MONTH TO DATE</span></div>
+          {[['Revenue', d?.revenue], ['Cost of goods sold', -(d?.cogs || 0)], ['Gross profit', d?.grossProfit], ['Operating expenses', -(d?.expenses || 0)], ['Net profit', d?.netProfit]].map(([label,value], i) => <div key={label} className={`px-5 py-3 flex justify-between text-sm ${i === 2 || i === 4 ? 'font-black bg-slate-50 text-blue-950' : 'text-slate-600'}`}><span>{label}</span><span>{fmt(value)}</span></div>)}
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h3 className="font-black text-blue-950 text-sm">Collections by payment method</h3>
+          <div className="mt-4 space-y-3">{(d?.paymentMix || []).length ? d.paymentMix.map(item => <div key={item.name}><div className="flex justify-between text-xs mb-1"><span className="text-slate-500">{item.name}</span><span className="font-bold">{fmt(item.value)}</span></div><div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-red-600 rounded-full" style={{ width: `${Math.min(100, d?.revenue ? item.value / d.revenue * 100 : 0)}%` }} /></div></div>) : <p className="text-xs text-slate-400">No posted collections in this period.</p>}</div>
+        </div>
       </div>
-      <p className="text-xs text-gray-400">Full ledger, VAT and bank reconciliation are on the mobile app's Finance module and coming to this view next.</p>
+      <div className="grid md:grid-cols-3 gap-3">{[['Double-entry ledger','Every posted sale creates a balanced accounting journal.'],['Controlled corrections','Posted records are reversed or voided, never silently deleted.'],['Branch drill-down','Reports respect each user’s assigned branches and outlets.']].map(([title,body]) => <div key={title} className="bg-blue-50 border border-blue-100 rounded-xl p-4"><p className="text-xs font-black text-blue-950">{title}</p><p className="text-xs text-blue-700 mt-1 leading-relaxed">{body}</p></div>)}</div>
     </div>
   );
 }
@@ -767,7 +764,8 @@ const SECTIONS = { dash: DashView, pos: PosView, mkt: MktView, fuel: FuelView, i
 
 // ─── SHELL ───
 export default function DesktopApp() {
-  const [role, setRole] = useState(null);
+  const [user, setUser] = useState(null);
+  const role = user?.role || null;
   const [active, setActive] = useState('dash');
   const [sideOpen, setSideOpen] = useState(true);
   const [pendingApprovals, setPendingApprovals] = useState(0);
@@ -775,9 +773,10 @@ export default function DesktopApp() {
   const refreshApprovals = () => api.approvals().then(list => setPendingApprovals(list.filter(a => a.status === 'pending').length)).catch(() => {});
   useEffect(() => { if (role) refreshApprovals(); }, [role]);
 
-  if (!role) return <LoginScreen onLogin={r => { setRole(r); const allowed = ROLE_MODULES[r] || []; setActive(allowed[0] || 'dash'); }} />;
+  if (!role) return <LoginScreen onLogin={account => { setUser(account); const allowed = ROLE_MODULES[account.role] || []; setActive(allowed[0] || 'dash'); }} />;
 
   const rc = ROLE_CONFIG[role];
+  const assignmentLabel = user?.outlets?.map(o => o.name).join(', ') || user?.branches?.map(b => b.name).join(', ') || user?.branch?.name || rc.branch;
   const allowedModules = ROLE_MODULES[role] || [];
   const navGroups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(i => allowedModules.includes(i.id)) })).filter(g => g.items.length > 0);
   const allNavItems = navGroups.flatMap(g => g.items);
@@ -799,7 +798,7 @@ export default function DesktopApp() {
         {sideOpen && (
           <div className="mx-2 mt-2 mb-1 p-2.5 rounded-xl border border-blue-800 flex items-center gap-2.5">
             <div className={`w-8 h-8 ${rc.color} rounded-lg flex items-center justify-center text-white text-xs font-black flex-shrink-0`}>{rc.initials}</div>
-            <div className="min-w-0"><p className="text-white text-xs font-bold leading-tight truncate">{rc.label}</p><p className="text-blue-400 text-xs truncate">{rc.branch}</p></div>
+            <div className="min-w-0"><p className="text-white text-xs font-bold leading-tight truncate">{rc.label}</p><p className="text-blue-400 text-xs truncate">{assignmentLabel}</p></div>
           </div>
         )}
         <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-3">
@@ -822,8 +821,8 @@ export default function DesktopApp() {
           ))}
         </nav>
         <div className="border-t border-blue-800 p-2 space-y-1 flex-shrink-0">
-          <button onClick={() => setRole(null)} className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl text-blue-300 hover:bg-blue-800 hover:text-white transition-colors ${!sideOpen ? 'justify-center' : ''}`}>
-            <LogOut size={13} className="flex-shrink-0" />{sideOpen && <span className="text-xs">Switch Role</span>}
+          <button onClick={() => { setToken(null); setUser(null); }} className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl text-blue-300 hover:bg-blue-800 hover:text-white transition-colors ${!sideOpen ? 'justify-center' : ''}`}>
+            <LogOut size={13} className="flex-shrink-0" />{sideOpen && <span className="text-xs">Sign out</span>}
           </button>
           <button onClick={() => setSideOpen(!sideOpen)} className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl text-blue-300 hover:bg-blue-800 hover:text-white transition-colors ${!sideOpen ? 'justify-center' : ''}`}>
             <Menu size={13} className="flex-shrink-0" />{sideOpen && <span className="text-xs">Collapse</span>}
@@ -833,7 +832,7 @@ export default function DesktopApp() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-100 px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-sm">
-          <div><h1 className="text-sm font-black text-gray-900">{activeLabel}</h1><p className="text-xs text-gray-400">{rc.label} · {rc.branch}</p></div>
+          <div><h1 className="text-sm font-black text-gray-900">{activeLabel}</h1><p className="text-xs text-gray-400">{rc.label} · {assignmentLabel}</p></div>
           <div className="flex items-center gap-3">
             {allowedModules.includes('approvals') && (
               <button onClick={() => setActive('approvals')} className="relative p-2 rounded-lg hover:bg-gray-100">
@@ -841,9 +840,9 @@ export default function DesktopApp() {
                 {pendingApprovals > 0 && <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-black">{pendingApprovals}</span>}
               </button>
             )}
-            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setRole(null)} title="Switch role">
+            <div className="flex items-center gap-2.5">
               <div className={`w-8 h-8 ${rc.color} rounded-full flex items-center justify-center text-white text-xs font-black`}>{rc.initials}</div>
-              <div className="hidden md:block text-left"><p className="text-xs font-black text-gray-800 leading-none">{rc.label}</p><p className="text-xs text-blue-600 font-semibold mt-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Switch Role</p></div>
+              <div className="hidden md:block text-left"><p className="text-xs font-black text-gray-800 leading-none">{user?.name || rc.label}</p><p className="text-xs text-blue-600 font-semibold mt-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> {rc.label}</p></div>
             </div>
           </div>
         </header>
