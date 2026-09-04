@@ -106,7 +106,7 @@ export default async function dashboardRoutes(fastify) {
       alerts.push({ i: '✅', m: `${pendingApprovals} approval(s) awaiting your review` });
     }
 
-    const recentSales = await Sale.find().sort({ createdAt: -1 }).limit(4).lean();
+    const recentSales = await Sale.find(scope).sort({ createdAt: -1 }).limit(4).lean();
     const recentTransactions = recentSales.map((s) => ({
       id: s.invoiceNumber,
       type: 'Sale',

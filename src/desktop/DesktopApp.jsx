@@ -70,6 +70,23 @@ const ROLE_MODULES = {
   auditor: ['dash', 'inv', 'expenses', 'fin', 'cust', 'rep'],
 };
 
+const PERMISSION_MODULES = { 'staff.view': 'staff', 'staff.manage': 'staff', 'branches.manage': 'sett', 'system.settings.manage': 'sett', 'website.manage': 'website', 'reconciliation.create': 'reconcile', 'reconciliation.review': 'reconcile', 'reports.view': 'rep', 'inventory.create': 'inv', 'inventory.update': 'inv', 'customers.manage': 'cust', 'procurement.manage': 'proc', 'expenses.manage': 'expenses', 'accounting.journal.create': 'fin', 'pos.sale.create': 'pos' };
+const DIVISION_MODULES = {
+  tyres: ['pos','inv','cust'], supermarket: ['mkt','inv','cust'], fuel: ['fuel','reconcile','expenses'],
+  warehouse: ['inv','proc'], head_office: ['dash','fin','expenses','cust','rep','staff','sett','website','approvals'],
+};
+function modulesForUser(account) {
+  const role = account?.role; const granted = (account?.permissions || []).map(p => PERMISSION_MODULES[p]).filter(Boolean);
+  if (['super_admin','ceo','gm'].includes(role)) return [...new Set([...(ROLE_MODULES[role] || []), ...granted])];
+  const divisions = [...new Set((account?.outlets || []).map(outlet => outlet.division).filter(Boolean))];
+  if (!divisions.length) return [...new Set([...(ROLE_MODULES[role] || []), ...granted])];
+  const business = new Set(divisions.flatMap(division => DIVISION_MODULES[division] || []));
+  const base = ['branch','sub_manager'].includes(role)
+    ? ['dash','reconcile',...business]
+    : (ROLE_MODULES[role] || []).filter(module => business.has(module));
+  return [...new Set([...base, ...granted])];
+}
+
 // ─── SHARED UI ───
 const Bd = ({ label, v = 'gray' }) => {
   const m = { red: 'bg-red-100 text-red-700', green: 'bg-green-100 text-green-700', blue: 'bg-blue-100 text-blue-700', yellow: 'bg-yellow-100 text-yellow-700', gray: 'bg-gray-100 text-gray-600', orange: 'bg-orange-100 text-orange-700' };
@@ -861,7 +878,7 @@ function ReconcileView({user}) {
   const load=()=>api.reconciliations().then(setItems).catch(e=>setErr(e.message)); useEffect(()=>{load();Promise.all([api.branches(),api.outlets()]).then(([b,o])=>{setBranches(b);setOutlets(o)}).catch(()=>{})},[]);
   const prepare=async()=>{try{setPrepared(await api.prepareReconciliation({branch:form.branch,outlet:form.outlet||'',date:form.businessDate}));setErr('')}catch(x){setErr(x.message)}};
   const submit=async()=>{try{await api.createReconciliation({...form,stockCountValue:Number(form.stockCountValue),counted:Object.fromEntries(['cash','card','mobileMoney','bank','credit'].map(k=>[k,Number(form.counted?.[k]||0)]))});setPrepared(null);load()}catch(x){setErr(x.message)}};
-  const canReview=['super_admin','ceo','gm','finance','accountant'].includes(user?.role)||user?.permissions?.includes('reconciliation.review');
+  const canReview=['super_admin','ceo','gm','finance','accountant','branch','sub_manager'].includes(user?.role)||user?.permissions?.includes('reconciliation.review');
   return <div className="space-y-5"><div><h2 className="text-xl font-black text-blue-900">Daily Sales, Cash & Stock Reconciliation</h2><p className="text-sm text-gray-500">Compare system sales with physical tenders and closing stock for each shop</p></div>{err&&<p className="text-xs text-red-600">⚠ {err}</p>}<div className="bg-white border rounded-xl p-4 grid md:grid-cols-4 gap-3"><input type="date" value={form.businessDate} onChange={e=>setForm({...form,businessDate:e.target.value})} className="border rounded-xl p-2 text-sm"/><select value={form.branch||''} onChange={e=>setForm({...form,branch:e.target.value,outlet:''})} className="border rounded-xl p-2 bg-white text-sm"><option value="">Select branch</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={form.outlet||''} onChange={e=>setForm({...form,outlet:e.target.value})} className="border rounded-xl p-2 bg-white text-sm"><option value="">Whole branch</option>{outlets.filter(o=>!form.branch||(o.branch?._id||o.branch)===form.branch).map(o=><option key={o._id} value={o._id}>{o.name}</option>)}</select><button onClick={prepare} className="bg-blue-900 text-white rounded-xl font-black">Prepare closing</button></div>
     {prepared&&<div className="bg-white border rounded-xl p-5"><div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4"><Kpi label="System Sales" val={fmt(prepared.expected.total)} Ic={DollarSign} bg="bg-blue-900"/><Kpi label="Transactions" val={prepared.salesCount} Ic={Receipt} bg="bg-blue-700"/><Kpi label="Book Stock" val={fmt(prepared.stockBookValue)} Ic={Package} bg="bg-red-600"/><Kpi label="SKUs Counted" val={prepared.skuCount} Ic={ClipboardList} bg="bg-slate-700"/></div><p className="font-black text-sm mb-3">Physical collection totals</p><div className="grid md:grid-cols-5 gap-3">{['cash','card','mobileMoney','bank','credit'].map(k=><label key={k} className="text-xs font-bold text-gray-500">{k.replace('mobileMoney','Mobile money')}<input type="number" min="0" step="0.01" value={form.counted?.[k]||''} onChange={e=>setForm({...form,counted:{...form.counted,[k]:e.target.value}})} className="mt-1 w-full border rounded-xl p-2"/><span className="block mt-1 text-blue-700">Expected {fmt(prepared.expected[k])}</span></label>)}</div><label className="block text-xs font-bold text-gray-500 mt-3">Physical closing stock value<input type="number" value={form.stockCountValue??prepared.stockBookValue} onChange={e=>setForm({...form,stockCountValue:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><label className="block text-xs font-bold text-gray-500 mt-3">Variance explanation<textarea value={form.explanation||''} onChange={e=>setForm({...form,explanation:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><button onClick={submit} className="mt-4 w-full py-3 bg-red-600 text-white rounded-xl font-black">Submit end-of-day reconciliation</button></div>}
     <div className="bg-white border rounded-xl overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Date','Branch / Outlet','Expected','Counted','Cash Variance','Stock Variance','Status','Review'].map(h=><th key={h} className="p-3 text-left text-gray-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{items.map(x=><tr key={x._id}><td className="p-3">{new Date(x.businessDate).toLocaleDateString()}</td><td className="p-3 font-bold">{x.branch?.name} / {x.outlet?.name||'All'}</td><td className="p-3">{fmt(x.expected?.total)}</td><td className="p-3">{fmt(x.counted?.total)}</td><td className={`p-3 font-bold ${x.variance<0?'text-red-600':'text-green-600'}`}>{fmt(x.variance)}</td><td className="p-3">{fmt(x.stockVariance)}</td><td className="p-3"><Bd label={x.status} v={x.status==='approved'?'green':x.status==='queried'?'red':'orange'}/></td><td className="p-3">{canReview&&x.status==='submitted'&&<div className="flex gap-2"><button onClick={()=>api.reviewReconciliation(x._id,{status:'approved'}).then(load)} className="text-green-700 font-bold">Approve</button><button onClick={()=>api.reviewReconciliation(x._id,{status:'queried'}).then(load)} className="text-red-600 font-bold">Query</button></div>}</td></tr>)}</tbody></table></div>
@@ -888,12 +905,11 @@ export default function DesktopApp() {
   const refreshApprovals = () => api.approvals().then(list => setPendingApprovals(list.filter(a => a.status === 'pending').length)).catch(() => {});
   useEffect(() => { if (role) refreshApprovals(); }, [role]);
 
-  if (!role) return <LoginScreen onLogin={account => { setUser(account); const allowed = ROLE_MODULES[account.role] || []; setActive(allowed[0] || 'dash'); }} />;
+  if (!role) return <LoginScreen onLogin={account => { setUser(account); const allowed = modulesForUser(account); setActive(allowed[0] || 'dash'); }} />;
 
   const rc = ROLE_CONFIG[role];
   const assignmentLabel = user?.outlets?.map(o => o.name).join(', ') || user?.branches?.map(b => b.name).join(', ') || user?.branch?.name || rc.branch;
-  const permissionModules = { 'staff.view': 'staff', 'staff.manage': 'staff', 'branches.manage': 'sett', 'system.settings.manage': 'sett', 'website.manage': 'website', 'reconciliation.create': 'reconcile', 'reconciliation.review': 'reconcile', 'reports.view': 'rep' };
-  const allowedModules = [...new Set([...(ROLE_MODULES[role] || []), ...(user?.permissions || []).map(p => permissionModules[p]).filter(Boolean)])];
+  const allowedModules = modulesForUser(user);
   const navGroups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(i => allowedModules.includes(i.id)) })).filter(g => g.items.length > 0);
   const allNavItems = navGroups.flatMap(g => g.items);
   const activeLabel = allNavItems.find(n => n.id === active)?.label || 'Dashboard';

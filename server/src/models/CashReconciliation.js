@@ -11,6 +11,8 @@ const cashReconciliationSchema = new mongoose.Schema({
   stockBookValue: { type: Number, default: 0 },
   stockCountValue: { type: Number, default: 0 },
   stockVariance: { type: Number, default: 0 },
+  sales: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Sale' }],
+  salesCount: { type: Number, default: 0 },
   explanation: String,
   status: { type: String, enum: ['submitted', 'approved', 'queried'], default: 'submitted' },
   submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
