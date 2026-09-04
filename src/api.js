@@ -105,4 +105,7 @@ export const api = {
   reviewReconciliation: (id, body) => request(`/reconciliations/${id}`, { method: 'PATCH', body }),
   siteContent: () => request('/site/content'),
   updateSiteContent: body => request('/site/content', { method: 'PATCH', body }),
+  demoBatches: () => request('/demo/batches'),
+  seedDemoData: body => request('/demo/seed', { method: 'POST', body }),
+  deleteDemoBatch: id => request(`/demo/batches/${id}`, { method: 'DELETE' }),
 };
