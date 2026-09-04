@@ -43,17 +43,31 @@ export const api = {
   },
   branches: () => request('/branches'),
   users: () => request('/users'),
+  createBranch: body => request('/branches', { method: 'POST', body }),
+  updateBranch: (id, body) => request(`/branches/${id}`, { method: 'PATCH', body }),
+  deleteBranch: id => request(`/branches/${id}`, { method: 'DELETE' }),
+  outlets: () => request('/outlets'),
+  createOutlet: body => request('/outlets', { method: 'POST', body }),
+  updateOutlet: (id, body) => request(`/outlets/${id}`, { method: 'PATCH', body }),
+  permissions: () => request('/permissions'),
+  createUser: body => request('/users', { method: 'POST', body }),
+  updateUser: (id, body) => request(`/users/${id}`, { method: 'PATCH', body }),
 
   products: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/products${qs ? `?${qs}` : ''}`);
   },
   updateProduct: (id, body) => request(`/products/${id}`, { method: 'PATCH', body }),
+  createProduct: body => request('/products', { method: 'POST', body }),
+  deleteProduct: id => request(`/products/${id}`, { method: 'DELETE' }),
 
   customers: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/customers${qs ? `?${qs}` : ''}`);
   },
+  createCustomer: body => request('/customers', { method: 'POST', body }),
+  updateCustomer: (id, body) => request(`/customers/${id}`, { method: 'PATCH', body }),
+  deleteCustomer: id => request(`/customers/${id}`, { method: 'DELETE' }),
 
   suppliers: () => request('/suppliers'),
 
@@ -84,4 +98,11 @@ export const api = {
   createFuelDip: body => request('/fuel/dips', { method: 'POST', body }),
   reviewFuelDip: (id, body) => request(`/fuel/dips/${id}/review`, { method: 'PATCH', body }),
   createFuelDelivery: body => request('/fuel/deliveries', { method: 'POST', body }),
+  financialAnalytics: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/analytics/financial${qs ? `?${qs}` : ''}`); },
+  reconciliations: () => request('/reconciliations'),
+  prepareReconciliation: params => request(`/reconciliations/prepare?${new URLSearchParams(params)}`),
+  createReconciliation: body => request('/reconciliations', { method: 'POST', body }),
+  reviewReconciliation: (id, body) => request(`/reconciliations/${id}`, { method: 'PATCH', body }),
+  siteContent: () => request('/site/content'),
+  updateSiteContent: body => request('/site/content', { method: 'PATCH', body }),
 };

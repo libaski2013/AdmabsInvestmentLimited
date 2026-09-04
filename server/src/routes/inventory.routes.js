@@ -3,10 +3,10 @@ import Product from '../models/Product.js';
 export default async function inventoryRoutes(fastify) {
   fastify.get('/api/store/products', async (request) => {
     const { category, q } = request.query || {};
-    const filter = { active: true, category: { $in: ['Tyre', 'Rim', 'Battery'] } };
+    const filter = { active: true, websiteVisible: { $ne: false }, category: { $in: ['Tyre', 'Rim', 'Battery'] } };
     if (category) filter.category = category;
     if (q) filter.$or = [{ name: new RegExp(q, 'i') }, { code: new RegExp(q, 'i') }, { 'attributes.brand': new RegExp(q, 'i') }];
-    return Product.find(filter).select('code name category price qty icon attributes branch outlet').populate('branch', 'name code').lean();
+    return Product.find(filter).select('code name category price qty icon imageUrl description attributes branch outlet').populate('branch', 'name code').populate('outlet', 'name code').lean();
   });
   fastify.get('/api/products', { preHandler: [fastify.authenticate] }, async (request) => {
     const { category, low } = request.query || {};
@@ -36,9 +36,19 @@ export default async function inventoryRoutes(fastify) {
     '/api/products/:id',
     { preHandler: [fastify.authenticate, fastify.requirePermission('inventory.update', 'ceo', 'gm', 'branch', 'sub_manager', 'storekeeper')] },
     async (request, reply) => {
+      if (!['super_admin', 'ceo', 'gm'].includes(request.user.role)) {
+        if (request.body?.outlet && !request.user.outletIds?.includes(String(request.body.outlet))) return reply.code(403).send({ error: 'Product must remain within an assigned outlet' });
+        if (request.body?.branch && !request.user.branchIds?.includes(String(request.body.branch))) return reply.code(403).send({ error: 'Product must remain within an assigned branch' });
+      }
       const product = await Product.findOneAndUpdate({ _id: request.params.id, ...fastify.scopeFilter(request) }, request.body, { new: true, runValidators: true });
       if (!product) return reply.code(404).send({ error: 'Product not found' });
       return product;
     }
   );
+
+  fastify.delete('/api/products/:id', { preHandler: [fastify.authenticate, fastify.requireRole('ceo', 'gm')] }, async (request, reply) => {
+    const product = await Product.findByIdAndUpdate(request.params.id, { active: false, websiteVisible: false }, { new: true });
+    if (!product) return reply.code(404).send({ error: 'Product not found' });
+    return reply.code(204).send();
+  });
 }

@@ -15,6 +15,7 @@ import './tailwind.css';
 
 // ─── ROLE CONFIG (matches the real backend roles — same ones used in the mobile app) ───
 const ROLE_CONFIG = {
+  super_admin: { label: 'Super Administrator', desc: 'System owner with complete configuration control', color: 'bg-slate-950', initials: 'SA', Ic: Shield, branch: 'All company locations' },
   ceo: { label: 'CEO / Director', desc: 'Full read & write access to every module', color: 'bg-blue-900', initials: 'CE', Ic: Star, branch: 'Head Office' },
   gm: { label: 'General Manager', desc: 'Full operational access across all branches', color: 'bg-blue-800', initials: 'GM', Ic: Building2, branch: 'Head Office' },
   finance: { label: 'Finance Manager', desc: 'Finance, expenses and approvals', color: 'bg-blue-700', initials: 'FM', Ic: DollarSign, branch: 'Head Office' },
@@ -43,24 +44,27 @@ const NAV_GROUPS = [
   { group: 'Finance & Sales', items: [
     { id: 'fin', label: 'Finance', icon: DollarSign },
     { id: 'cust', label: 'Customers', icon: Users },
+    { id: 'reconcile', label: 'Daily Reconciliation', icon: Wallet },
     { id: 'approvals', label: 'Approvals', icon: ClipboardList },
   ] },
   { group: 'People & System', items: [
     { id: 'staff', label: 'Staff Directory', icon: UserCheck },
     { id: 'rep', label: 'Reports', icon: BarChart2 },
     { id: 'sett', label: 'Company & Branches', icon: Settings },
+    { id: 'website', label: 'Website Manager', icon: Store },
   ] },
 ];
 
 const ROLE_MODULES = {
-  ceo: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'proc', 'expenses', 'fin', 'cust', 'approvals', 'staff', 'rep', 'sett'],
-  gm: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'proc', 'expenses', 'fin', 'cust', 'approvals', 'staff', 'rep', 'sett'],
-  finance: ['dash', 'fin', 'expenses', 'approvals', 'cust', 'rep'],
-  branch: ['dash', 'pos', 'mkt', 'inv', 'expenses', 'staff', 'rep'],
+  super_admin: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'proc', 'expenses', 'fin', 'cust', 'reconcile', 'approvals', 'staff', 'rep', 'sett', 'website'],
+  ceo: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'proc', 'expenses', 'fin', 'cust', 'reconcile', 'approvals', 'staff', 'rep'],
+  gm: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'proc', 'expenses', 'fin', 'cust', 'reconcile', 'approvals', 'staff', 'rep', 'sett'],
+  finance: ['dash', 'fin', 'expenses', 'reconcile', 'approvals', 'cust', 'rep'],
+  branch: ['dash', 'pos', 'mkt', 'inv', 'expenses', 'reconcile', 'staff', 'rep'],
   staff: ['pos', 'mkt'],
   fuel: ['dash', 'fuel', 'expenses'],
-  accountant: ['dash', 'fin', 'expenses', 'cust', 'rep'],
-  sub_manager: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'expenses', 'staff', 'rep'],
+  accountant: ['dash', 'fin', 'expenses', 'reconcile', 'cust', 'rep'],
+  sub_manager: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'expenses', 'reconcile', 'staff', 'rep'],
   cashier: ['pos', 'mkt'],
   storekeeper: ['dash', 'inv', 'proc'],
   auditor: ['dash', 'inv', 'expenses', 'fin', 'cust', 'rep'],
@@ -344,22 +348,27 @@ function PosPanel({ title, color, categoryFilter, categories }) {
   );
 }
 
-const PosView = () => <PosPanel title="Point of Sale" color="bg-red-600" categoryFilter={p => ['Tyre', 'Battery', 'Service'].includes(p.category)} categories={['Tyre', 'Battery', 'Service']} />;
+const PosView = () => <PosPanel title="Point of Sale" color="bg-red-600" categoryFilter={p => ['Tyre', 'Rim', 'Battery', 'Service'].includes(p.category)} categories={['Tyre', 'Rim', 'Battery', 'Service']} />;
 const MktView = () => <PosPanel title="Supermarket POS" color="bg-green-600" categoryFilter={p => ['Grocery', 'Beverages', 'Snacks', 'Household', 'Dairy', 'Bakery'].includes(p.category)} categories={['Grocery', 'Beverages', 'Snacks', 'Household', 'Dairy', 'Bakery']} />;
 
 // ─── INVENTORY ───
-function InvView() {
+function InvView({ user }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  useEffect(() => { api.products().then(setProducts).catch(() => {}).finally(() => setLoading(false)); }, []);
+  const [edit, setEdit] = useState(null); const [form, setForm] = useState({}); const [branches, setBranches] = useState([]); const [outlets, setOutlets] = useState([]); const [err, setErr] = useState('');
+  const load = () => api.products().then(setProducts).catch(e => setErr(e.message)).finally(() => setLoading(false));
+  useEffect(() => { load(); Promise.all([api.branches(), api.outlets()]).then(([b,o]) => { setBranches(b); setOutlets(o); }).catch(() => {}); }, []);
+  const canEdit = ['ceo','gm','branch','sub_manager','storekeeper'].includes(user?.role) || user?.permissions?.includes('inventory.update');
+  const save = async e => { e.preventDefault(); setErr(''); try { const body = { ...form, qty: Number(form.qty), reorderLevel: Number(form.reorderLevel), price: Number(form.price), cost: Number(form.cost), websiteVisible: form.websiteVisible !== false }; edit === 'new' ? await api.createProduct(body) : await api.updateProduct(edit._id, body); setEdit(null); await load(); } catch (x) { setErr(x.message); } };
   const low = products.filter(p => p.qty <= p.reorderLevel);
   const filtered = filter === 'low' ? low : products;
   const stockValue = products.reduce((s, p) => s + p.qty * (p.cost || 0), 0);
 
   return (
     <div className="space-y-5">
-      <div><h2 className="text-xl font-black text-blue-900">Inventory</h2><p className="text-sm text-gray-500">Real stock levels across all categories</p></div>
+      <div className="flex justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Inventory</h2><p className="text-sm text-gray-500">Stock is isolated by branch and outlet; website availability updates after every sale</p></div>{canEdit && <button onClick={() => { setEdit('new'); setForm({ category:'Tyre', qty:0, reorderLevel:5, price:0, cost:0, websiteVisible:true }); }} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Add Product</button>}</div>
+      {err && <p className="text-xs text-red-600">⚠ {err}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Total SKUs" val={String(products.length)} Ic={Package} bg="bg-blue-900" />
         <Kpi label="Low Stock" val={String(low.length)} pos={false} Ic={AlertTriangle} bg="bg-red-600" />
@@ -371,15 +380,18 @@ function InvView() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-gray-50"><tr>{['Code', 'Product', 'Category', 'Qty', 'Price'].map(h => <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-400 uppercase">{h}</th>)}</tr></thead>
+              <thead className="bg-gray-50"><tr>{['Code', 'Product', 'Category', 'Location', 'Qty', 'Price', 'Website', 'Action'].map(h => <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-400 uppercase">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((p, i) => (
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-4 py-2.5 font-mono text-blue-600 font-bold">{p.code}</td>
                     <td className="px-4 py-2.5 font-semibold text-gray-800">{p.name}</td>
                     <td className="px-4 py-2.5"><Bd label={p.category} v="gray" /></td>
+                    <td className="px-4 py-2.5 text-gray-500">{branches.find(b => b._id === p.branch)?.name || '—'}{outlets.find(o => o._id === p.outlet)?.name ? ` / ${outlets.find(o => o._id === p.outlet)?.name}` : ''}</td>
                     <td className="px-4 py-2.5 font-bold"><span className={p.qty <= p.reorderLevel ? 'text-red-600' : 'text-gray-800'}>{p.qty}</span></td>
                     <td className="px-4 py-2.5 font-bold">{fmt(p.price)}</td>
+                    <td className="px-4 py-2.5"><Bd label={p.websiteVisible !== false ? (p.qty ? 'Live' : 'Out of stock') : 'Hidden'} v={p.websiteVisible !== false && p.qty ? 'green' : 'gray'} /></td>
+                    <td className="px-4 py-2.5">{canEdit && <button onClick={() => { setEdit(p); setForm(p); }} className="text-blue-700 font-bold">Edit</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -387,6 +399,7 @@ function InvView() {
           </div>
         </div>
       )}
+      {edit && <Modal title={edit === 'new' ? 'Add Inventory Item' : 'Edit Inventory Item'} wide onClose={() => setEdit(null)}><form onSubmit={save} className="space-y-3"><div className="grid md:grid-cols-2 gap-3"><label className="text-xs font-bold text-gray-500">Code<input required value={form.code || ''} onChange={e=>setForm({...form,code:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="text-xs font-bold text-gray-500">Product name<input required value={form.name || ''} onChange={e=>setForm({...form,name:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="text-xs font-bold text-gray-500">Category<select value={form.category || 'Tyre'} onChange={e=>setForm({...form,category:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['Tyre','Rim','Battery','Lubricant','Grocery','Beverages','Snacks','Household','Bakery','Dairy','Service'].map(x=><option key={x}>{x}</option>)}</select></label><label className="text-xs font-bold text-gray-500">Branch<select required value={form.branch || ''} onChange={e=>setForm({...form,branch:e.target.value,outlet:''})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Select branch</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select></label><label className="text-xs font-bold text-gray-500">Outlet / shop<select value={form.outlet || ''} onChange={e=>setForm({...form,outlet:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Branch-level stock</option>{outlets.filter(o => !form.branch || (o.branch?._id || o.branch) === form.branch).map(o=><option key={o._id} value={o._id}>{o.name} · {o.division}</option>)}</select></label>{[['qty','Quantity'],['reorderLevel','Reorder level'],['cost','Unit cost'],['price','Selling price']].map(([k,l])=><label key={k} className="text-xs font-bold text-gray-500">{l}<input type="number" min="0" step="0.01" value={form[k] ?? ''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label>)}</div><label className="block text-xs font-bold text-gray-500">Description<textarea value={form.description || ''} onChange={e=>setForm({...form,description:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="block text-xs font-bold text-gray-500">Product image URL or data image<input value={form.imageUrl || ''} onChange={e=>setForm({...form,imageUrl:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5" /></label><label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={form.websiteVisible !== false} onChange={e=>setForm({...form,websiteVisible:e.target.checked})} /> Show this item on the public website</label><button className="w-full bg-red-600 text-white rounded-xl py-3 font-black text-sm">Save inventory record</button>{edit !== 'new' && user?.role === 'ceo' && <button type="button" onClick={async()=>{if(confirm('Archive this product and remove it from the website?')){await api.deleteProduct(edit._id);setEdit(null);load();}}} className="w-full text-red-600 text-xs font-bold">Archive product</button>}</form></Modal>}
     </div>
   );
 }
@@ -551,17 +564,21 @@ function ExpensesView() {
 }
 
 // ─── CUSTOMERS ───
-function CustView() {
+function CustView({ user }) {
   const [customers, setCustomers] = useState([]);
   const [selId, setSelId] = useState(null);
   const [loading, setLoading] = useState(true);
-  useEffect(() => { api.customers().then(list => { setCustomers(list); if (list[0]) setSelId(list[0]._id); }).catch(() => {}).finally(() => setLoading(false)); }, []);
+  const [modal,setModal]=useState(null); const [form,setForm]=useState({type:'Retail'}); const [branches,setBranches]=useState([]); const [outlets,setOutlets]=useState([]); const [err,setErr]=useState('');
+  const load=()=>api.customers().then(list => { setCustomers(list); if (list[0]&&!selId) setSelId(list[0]._id); }).catch(e=>setErr(e.message)).finally(() => setLoading(false));
+  useEffect(() => { load(); Promise.all([api.branches(),api.outlets()]).then(([b,o])=>{setBranches(b);setOutlets(o);}).catch(()=>{}); }, []);
+  const save=async e=>{e.preventDefault();setErr('');try{modal==='new'?await api.createCustomer(form):await api.updateCustomer(modal._id,form);setModal(null);await load();}catch(x){setErr(x.message);}};
   const sel = customers.find(c => c._id === selId);
   const creditOut = customers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
 
   return (
     <div className="space-y-5">
-      <div><h2 className="text-xl font-black text-blue-900">Customers & Fleet</h2><p className="text-sm text-gray-500">Accounts, credit balances and loyalty</p></div>
+      <div className="flex justify-between"><div><h2 className="text-xl font-black text-blue-900">Customers & Fleet</h2><p className="text-sm text-gray-500">Branch-linked accounts, credit balances and loyalty</p></div><button onClick={()=>{setModal('new');setForm({type:'Retail',branch:user?.branch?._id||'',outlet:''});}} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Add Customer</button></div>
+      {err&&<p className="text-xs text-red-600">⚠ {err}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Customers" val={String(customers.length)} Ic={Users} bg="bg-blue-900" />
         <Kpi label="Fleet & Corporate" val={String(customers.filter(c => c.type !== 'Retail').length)} Ic={Truck} bg="bg-blue-700" />
@@ -586,7 +603,7 @@ function CustView() {
           {sel && (
             <div className="lg:col-span-3">
               <div className="bg-blue-900 rounded-xl p-5 text-white">
-                <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="font-black text-lg">{sel.name}</h3><p className="text-sm opacity-70">{sel.type} · {sel.visits} visits</p></div></div>
+                <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="font-black text-lg">{sel.name}</h3><p className="text-sm opacity-70">{sel.type} · {sel.visits} visits</p></div><button onClick={()=>{setModal(sel);setForm(sel);}} className="text-xs font-bold bg-white/10 px-3 py-2 rounded-lg">Edit</button></div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {[['Phone', sel.phone || '—'], ['Balance', fmt(sel.balance)], ['Loyalty Points', String(sel.loyaltyPoints || 0)], ['Last Visit', sel.lastVisit ? new Date(sel.lastVisit).toLocaleDateString() : '—']].map(([k, v], i) => (
                     <div key={i} className="bg-white bg-opacity-10 rounded-xl p-2.5"><p className="opacity-60 mb-0.5">{k}</p><p className="font-bold">{v}</p></div>
@@ -597,6 +614,7 @@ function CustView() {
           )}
         </div>
       )}
+      {modal&&<Modal title={modal==='new'?'Add Customer':'Edit Customer'} onClose={()=>setModal(null)}><form onSubmit={save} className="space-y-3">{[['name','Full / company name'],['phone','Phone'],['email','Email']].map(([k,l])=><label key={k} className="block text-xs font-bold text-gray-500">{l}<input required={k==='name'} value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label>)}<label className="block text-xs font-bold text-gray-500">Customer type<select value={form.type||'Retail'} onChange={e=>setForm({...form,type:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['Retail','Fleet','Corporate'].map(x=><option key={x}>{x}</option>)}</select></label><div className="grid grid-cols-2 gap-3"><label className="text-xs font-bold text-gray-500">Branch<select value={form.branch||''} onChange={e=>setForm({...form,branch:e.target.value,outlet:''})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Unassigned</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select></label><label className="text-xs font-bold text-gray-500">Outlet<select value={form.outlet||''} onChange={e=>setForm({...form,outlet:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Branch level</option>{outlets.filter(o=>!form.branch||(o.branch?._id||o.branch)===form.branch).map(o=><option key={o._id} value={o._id}>{o.name}</option>)}</select></label></div><button className="w-full py-3 bg-red-600 text-white font-black rounded-xl">Save customer</button></form></Modal>}
     </div>
   );
 }
@@ -673,14 +691,19 @@ function FinView() {
 }
 
 // ─── STAFF DIRECTORY ───
-function StaffView() {
+function StaffView({ user }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  useEffect(() => { api.users().then(setUsers).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, []);
+  const [modal,setModal]=useState(null); const [form,setForm]=useState({role:'staff',permissions:[],branches:[],outlets:[]}); const [branches,setBranches]=useState([]); const [outlets,setOutlets]=useState([]); const [permissions,setPermissions]=useState([]);
+  const load=()=>api.users().then(setUsers).catch(e => setErr(e.message)).finally(() => setLoading(false));
+  useEffect(() => { load(); Promise.all([api.branches(),api.outlets()]).then(([b,o])=>{setBranches(b);setOutlets(o)}).catch(()=>{}); if(user?.role==='super_admin')api.permissions().then(setPermissions).catch(()=>{}); }, []);
+  const adminExists=users.some(u=>u.role==='super_admin'); const canManage=user?.role==='super_admin'; const canBootstrap=user?.role==='ceo'&&!adminExists;
+  const save=async e=>{e.preventDefault();setErr('');try{const body={...form,branch:form.branch||undefined,branches:form.branch?[form.branch]:[],outlets:form.outlets||[]};modal==='new'?await api.createUser(body):await api.updateUser(modal._id,body);setModal(null);await load();}catch(x){setErr(x.message);}};
   return (
     <div className="space-y-5">
-      <div><h2 className="text-xl font-black text-blue-900">Staff Directory</h2><p className="text-sm text-gray-500">Registered accounts and roles</p></div>
+      <div className="flex justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Staff, Roles & Permissions</h2><p className="text-sm text-gray-500">Assign people to branches, outlets and only the controls they need</p></div>{(canManage||canBootstrap)&&<button onClick={()=>{setModal('new');setForm({role:canBootstrap?'super_admin':'staff',permissions:[],outlets:[]});}} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">{canBootstrap?'Create Super Admin':'+ Add Staff'}</button>}</div>
+      {canBootstrap&&<div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-xl p-3 text-xs"><b>One-time setup:</b> create the independent Super Admin account. After this, only that account can manage users, roles and system access.</div>}
       {err && <p className="text-xs text-red-600">{err === 'Forbidden' ? "Your role doesn't have access to the staff directory." : err}</p>}
       {loading ? <p className="text-xs text-gray-400">Loading…</p> : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -693,38 +716,30 @@ function StaffView() {
                   <div><p className="text-sm font-bold text-gray-800">{u.name}</p><p className="text-xs text-gray-500 mt-0.5">{rc?.label || u.role}</p><p className="text-xs text-gray-400 mt-0.5">{u.branch?.name || '—'}</p></div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex justify-between items-center text-xs"><span className="text-gray-400">{u.username}</span><Bd label={u.active ? 'Active' : 'Inactive'} v={u.active ? 'green' : 'red'} /></div>
+                {canManage&&u.role!=='super_admin'&&<button onClick={()=>{setModal(u);setForm({...u,branch:u.branch?._id||'',branches:(u.branches||[]).map(b=>b._id),outlets:(u.outlets||[]).map(o=>o._id),password:''});}} className="mt-3 w-full border border-blue-100 text-blue-800 rounded-lg py-2 text-xs font-bold">Edit access</button>}
               </div>
             );
           })}
         </div>
       )}
+      {modal&&<Modal wide title={modal==='new'?(canBootstrap?'Create Independent Super Admin':'Add Staff Account'):'Edit Staff Access'} onClose={()=>setModal(null)}><form onSubmit={save} className="space-y-4"><div className="grid md:grid-cols-2 gap-3">{[['name','Full name'],['username','Username'],['employeeNumber','Employee number'],['password',modal==='new'?'Temporary password':'New password (optional)']].map(([k,l])=><label key={k} className="text-xs font-bold text-gray-500">{l}<input required={k==='name'||k==='username'||(k==='password'&&modal==='new')} type={k==='password'?'password':'text'} value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label>)}<label className="text-xs font-bold text-gray-500">Role<select disabled={canBootstrap} value={form.role||'staff'} onChange={e=>setForm({...form,role:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['super_admin','ceo','gm','finance','accountant','branch','sub_manager','staff','cashier','fuel','storekeeper','procurement','technician','auditor'].filter(r=>r!=='super_admin'||canBootstrap).map(r=><option key={r} value={r}>{(ROLE_CONFIG[r]?.label||r).replaceAll('_',' ')}</option>)}</select></label><label className="text-xs font-bold text-gray-500">Primary branch<select value={form.branch||''} onChange={e=>setForm({...form,branch:e.target.value,outlets:[]})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Company-wide / none</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select></label></div>{canManage&&<><div><p className="text-xs font-black text-blue-950 mb-2">Assigned outlets</p><div className="grid md:grid-cols-3 gap-2">{outlets.filter(o=>!form.branch||(o.branch?._id||o.branch)===form.branch).map(o=><label key={o._id} className="flex gap-2 p-2 border rounded-lg text-xs"><input type="checkbox" checked={(form.outlets||[]).includes(o._id)} onChange={e=>setForm({...form,outlets:e.target.checked?[...(form.outlets||[]),o._id]:(form.outlets||[]).filter(x=>x!==o._id)})}/>{o.name} · {o.division}</label>)}</div></div><div><p className="text-xs font-black text-blue-950 mb-2">Additional privileges</p><div className="grid md:grid-cols-2 gap-2">{permissions.map(p=><label key={p} className="flex gap-2 p-2 border rounded-lg text-xs"><input type="checkbox" checked={(form.permissions||[]).includes(p)} onChange={e=>setForm({...form,permissions:e.target.checked?[...(form.permissions||[]),p]:(form.permissions||[]).filter(x=>x!==p)})}/>{p.replaceAll('.',' › ')}</label>)}</div></div><label className="flex gap-2 text-xs font-bold"><input type="checkbox" checked={form.active!==false} onChange={e=>setForm({...form,active:e.target.checked})}/> Account active</label></>}<button className="w-full py-3 bg-red-600 text-white rounded-xl font-black">{canBootstrap?'Activate Super Admin':'Save role and access'}</button></form></Modal>}
     </div>
   );
 }
 
 // ─── REPORTS ───
 function RepView() {
-  const [d, setD] = useState(null);
-  useEffect(() => { api.dashboard().then(setD).catch(() => {}); }, []);
-  return (
-    <div className="space-y-5">
-      <div><h2 className="text-xl font-black text-blue-900">Reports</h2><p className="text-sm text-gray-500">Revenue trend built from real sales data</p></div>
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <h3 className="font-black text-gray-800 mb-4">Monthly Revenue Trend ($'000)</h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={d?.revenueTrend || []} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-            <XAxis dataKey="m" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip /><Legend />
-            <Bar dataKey="t" name="Tyres" fill="#1e3a8a" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="f" name="Fuel" fill="#dc2626" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="s" name="Supermarket" fill="#059669" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
+  const now=new Date(), six=new Date(now.getFullYear(),now.getMonth()-5,1);
+  const [filters,setFilters]=useState({start:six.toISOString().slice(0,10),end:now.toISOString().slice(0,10),branch:'',product:''}); const [d,setD]=useState(null); const [branches,setBranches]=useState([]); const [err,setErr]=useState('');
+  const load=()=>api.financialAnalytics(Object.fromEntries(Object.entries(filters).filter(([,v])=>v))).then(setD).catch(e=>setErr(e.message));
+  useEffect(()=>{load();api.branches().then(setBranches).catch(()=>{});},[]);
+  const chart=[...(d?.monthly||[]).map(x=>({month:x.month,actual:x.revenue})),...(d?.forecast||[]).map(x=>({month:x.month,forecast:x.forecast,low:x.low,high:x.high}))];
+  return <div className="space-y-5"><div><h2 className="text-xl font-black text-blue-900">Financial Analytics & Forecast</h2><p className="text-sm text-gray-500">Filter actual sales, margins, branches and products; forecast uses recent weighted growth with a ±15% range</p></div>
+    <div className="bg-white border rounded-xl p-4 grid md:grid-cols-5 gap-3"><input type="date" value={filters.start} onChange={e=>setFilters({...filters,start:e.target.value})} className="border rounded-xl p-2 text-sm"/><input type="date" value={filters.end} onChange={e=>setFilters({...filters,end:e.target.value})} className="border rounded-xl p-2 text-sm"/><select value={filters.branch} onChange={e=>setFilters({...filters,branch:e.target.value})} className="border rounded-xl p-2 text-sm bg-white"><option value="">All branches</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={filters.product} onChange={e=>setFilters({...filters,product:e.target.value})} className="border rounded-xl p-2 text-sm bg-white"><option value="">All products</option>{(d?.products||[]).map(p=><option key={p._id} value={p._id}>{p.name}</option>)}</select><button onClick={load} className="bg-blue-900 text-white rounded-xl font-black text-sm">Apply filters</button></div>{err&&<p className="text-red-600 text-xs">⚠ {err}</p>}
+    <div className="grid grid-cols-2 lg:grid-cols-6 gap-3"><Kpi label="Revenue" val={fmt(d?.summary?.revenue)} Ic={TrendingUp} bg="bg-blue-900"/><Kpi label="Gross Profit" val={fmt(d?.summary?.grossProfit)} Ic={Wallet} bg="bg-blue-700"/><Kpi label="Expenses" val={fmt(d?.summary?.expenses)} Ic={Receipt} bg="bg-red-600"/><Kpi label="Net Profit" val={fmt(d?.summary?.netProfit)} Ic={Star} bg="bg-blue-600"/><Kpi label="Inventory Value" val={fmt(d?.summary?.inventoryValue)} Ic={Package} bg="bg-slate-700"/><Kpi label="Forecast Growth" val={`${d?.summary?.forecastGrowthPercent||0}%`} Ic={BarChart2} bg="bg-purple-700"/></div>
+    <div className="bg-white rounded-xl border p-5"><h3 className="font-black text-blue-950 mb-4">Actual Revenue and Three-Month Forecast</h3><ResponsiveContainer width="100%" height={300}><AreaChart data={chart}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}}/><Tooltip formatter={v=>fmt(v)}/><Legend/><Area type="monotone" dataKey="actual" name="Actual revenue" stroke="#1e3a8a" fill="#dbeafe" strokeWidth={3}/><Area type="monotone" dataKey="forecast" name="Forecast" stroke="#dc2626" fill="#fee2e2" strokeDasharray="6 4" strokeWidth={3}/><Area type="monotone" dataKey="high" name="High case" stroke="#16a34a" fill="none"/><Area type="monotone" dataKey="low" name="Low case" stroke="#f59e0b" fill="none"/></AreaChart></ResponsiveContainer></div>
+    <div className="grid lg:grid-cols-2 gap-5"><div className="bg-white rounded-xl border p-5"><h3 className="font-black mb-4">Revenue by Branch</h3>{(d?.byBranch||[]).map((x,i)=><div key={x.name} className="flex justify-between py-2 border-b text-sm"><span>{i+1}. {x.name}</span><b>{fmt(x.value)}</b></div>)}</div><div className="bg-white rounded-xl border p-5"><h3 className="font-black mb-4">Top Products</h3>{(d?.topProducts||[]).map((x,i)=><div key={x.name} className="flex justify-between py-2 border-b text-sm"><span>{i+1}. {x.name}</span><b>{fmt(x.value)}</b></div>)}</div></div>
+  </div>;
 }
 
 // ─── FUEL STATION ───
@@ -816,26 +831,35 @@ function FuelView({ user }) {
 
 // ─── COMPANY & BRANCHES ───
 function SettView() {
-  const [branches, setBranches] = useState([]);
-  useEffect(() => { api.branches().then(setBranches).catch(() => {}); }, []);
-  return (
-    <div className="space-y-5">
-      <div><h2 className="text-xl font-black text-blue-900">Company & Branches</h2><p className="text-sm text-gray-500">Registered branches</p></div>
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto"><table className="w-full text-xs">
-          <thead className="bg-gray-50"><tr>{['Branch', 'Type', 'Manager', 'Staff'].map(h => <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-400 uppercase">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-gray-50">
-            {branches.map((b, i) => (
-              <tr key={i} className="hover:bg-gray-50"><td className="px-4 py-3 font-bold text-gray-800">{b.name}</td><td className="px-4 py-3"><Bd label={b.type} v="gray" /></td><td className="px-4 py-3 text-gray-600">{b.manager}</td><td className="px-4 py-3 text-gray-500">{b.staffCount}</td></tr>
-            ))}
-          </tbody>
-        </table></div>
-      </div>
-    </div>
-  );
+  const [branches,setBranches]=useState([]),[outlets,setOutlets]=useState([]); const [modal,setModal]=useState(null),[form,setForm]=useState({}),[err,setErr]=useState('');
+  const load=()=>Promise.all([api.branches(),api.outlets()]).then(([b,o])=>{setBranches(b);setOutlets(o)}).catch(e=>setErr(e.message)); useEffect(()=>{load()},[]);
+  const save=async e=>{e.preventDefault();try{if(modal.type==='branch')modal.item?await api.updateBranch(modal.item._id,form):await api.createBranch({...form,divisions:form.divisions||[]});else modal.item?await api.updateOutlet(modal.item._id,form):await api.createOutlet(form);setModal(null);load();}catch(x){setErr(x.message)}};
+  return <div className="space-y-5"><div className="flex justify-between"><div><h2 className="text-xl font-black text-blue-900">Company, Branches & Outlets</h2><p className="text-sm text-gray-500">Super Admin controls the legal branch structure and each shop location</p></div><div className="flex gap-2"><button onClick={()=>{setModal({type:'branch'});setForm({type:'Tyres & Batteries',divisions:['tyres'],active:true})}} className="px-3 py-2 border border-blue-200 text-blue-900 rounded-xl text-xs font-bold">+ Branch</button><button onClick={()=>{setModal({type:'outlet'});setForm({division:'tyres',active:true})}} className="px-3 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Outlet</button></div></div>{err&&<p className="text-xs text-red-600">⚠ {err}</p>}
+    <div className="grid lg:grid-cols-2 gap-5"><div className="bg-white rounded-xl border p-4"><h3 className="font-black mb-3">Branches</h3>{branches.map(b=><div key={b._id} className="flex justify-between items-center py-3 border-b"><div><p className="font-bold text-sm">{b.name}</p><p className="text-xs text-gray-400">{b.code||'No code'} · {b.type} · {(b.divisions||[]).join(', ')}</p></div><div className="flex gap-2"><button onClick={()=>{setModal({type:'branch',item:b});setForm(b)}} className="text-xs text-blue-700 font-bold">Edit</button><button onClick={async()=>{if(confirm(`Delete ${b.name}?`)){try{await api.deleteBranch(b._id);load()}catch(x){setErr(x.message)}}}} className="text-xs text-red-600 font-bold">Delete</button></div></div>)}</div><div className="bg-white rounded-xl border p-4"><h3 className="font-black mb-3">Outlets / Shops</h3>{outlets.map(o=><div key={o._id} className="flex justify-between items-center py-3 border-b"><div><p className="font-bold text-sm">{o.name}</p><p className="text-xs text-gray-400">{o.code} · {o.branch?.name} · {o.division}</p></div><button onClick={()=>{setModal({type:'outlet',item:o});setForm({...o,branch:o.branch?._id})}} className="text-xs text-blue-700 font-bold">Edit</button></div>)}</div></div>
+    {modal&&<Modal title={`${modal.item?'Edit':'Add'} ${modal.type==='branch'?'Branch':'Outlet'}`} onClose={()=>setModal(null)}><form onSubmit={save} className="space-y-3">{modal.type==='branch'?<>{[['name','Branch name'],['code','Code'],['manager','Manager name'],['address','Address'],['region','Region'],['phone','Phone']].map(([k,l])=><label key={k} className="block text-xs font-bold text-gray-500">{l}<input required={k==='name'} value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label>)}<label className="block text-xs font-bold text-gray-500">Branch type<select value={form.type||''} onChange={e=>setForm({...form,type:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['Tyres & Batteries','Filling Station','Supermarket','Administration'].map(x=><option key={x}>{x}</option>)}</select></label><div><p className="text-xs font-bold text-gray-500 mb-2">Divisions at this branch</p><div className="flex flex-wrap gap-2">{['tyres','fuel','supermarket','warehouse','head_office'].map(d=><label key={d} className="border rounded-lg p-2 text-xs"><input type="checkbox" checked={(form.divisions||[]).includes(d)} onChange={e=>setForm({...form,divisions:e.target.checked?[...(form.divisions||[]),d]:(form.divisions||[]).filter(x=>x!==d)})}/> {d}</label>)}</div></div></>:<>{[['code','Outlet code'],['name','Outlet name']].map(([k,l])=><label key={k} className="block text-xs font-bold text-gray-500">{l}<input required value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label>)}<label className="block text-xs font-bold text-gray-500">Parent branch<select required value={form.branch||''} onChange={e=>setForm({...form,branch:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white"><option value="">Select</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select></label><label className="block text-xs font-bold text-gray-500">Division<select value={form.division||'tyres'} onChange={e=>setForm({...form,division:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['tyres','fuel','supermarket','warehouse','head_office'].map(x=><option key={x}>{x}</option>)}</select></label></>}<button className="w-full py-3 bg-red-600 text-white rounded-xl font-black">Save location</button></form></Modal>}
+  </div>;
 }
 
-const SECTIONS = { dash: DashView, pos: PosView, mkt: MktView, fuel: FuelView, inv: InvView, proc: ProcView, expenses: ExpensesView, fin: FinView, cust: CustView, staff: StaffView, rep: RepView, sett: SettView };
+function ReconcileView({user}) {
+  const [items,setItems]=useState([]),[branches,setBranches]=useState([]),[outlets,setOutlets]=useState([]),[form,setForm]=useState({businessDate:new Date().toISOString().slice(0,10),counted:{}}),[prepared,setPrepared]=useState(null),[err,setErr]=useState('');
+  const load=()=>api.reconciliations().then(setItems).catch(e=>setErr(e.message)); useEffect(()=>{load();Promise.all([api.branches(),api.outlets()]).then(([b,o])=>{setBranches(b);setOutlets(o)}).catch(()=>{})},[]);
+  const prepare=async()=>{try{setPrepared(await api.prepareReconciliation({branch:form.branch,outlet:form.outlet||'',date:form.businessDate}));setErr('')}catch(x){setErr(x.message)}};
+  const submit=async()=>{try{await api.createReconciliation({...form,stockCountValue:Number(form.stockCountValue),counted:Object.fromEntries(['cash','card','mobileMoney','bank','credit'].map(k=>[k,Number(form.counted?.[k]||0)]))});setPrepared(null);load()}catch(x){setErr(x.message)}};
+  const canReview=['super_admin','ceo','gm','finance','accountant'].includes(user?.role)||user?.permissions?.includes('reconciliation.review');
+  return <div className="space-y-5"><div><h2 className="text-xl font-black text-blue-900">Daily Sales, Cash & Stock Reconciliation</h2><p className="text-sm text-gray-500">Compare system sales with physical tenders and closing stock for each shop</p></div>{err&&<p className="text-xs text-red-600">⚠ {err}</p>}<div className="bg-white border rounded-xl p-4 grid md:grid-cols-4 gap-3"><input type="date" value={form.businessDate} onChange={e=>setForm({...form,businessDate:e.target.value})} className="border rounded-xl p-2 text-sm"/><select value={form.branch||''} onChange={e=>setForm({...form,branch:e.target.value,outlet:''})} className="border rounded-xl p-2 bg-white text-sm"><option value="">Select branch</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={form.outlet||''} onChange={e=>setForm({...form,outlet:e.target.value})} className="border rounded-xl p-2 bg-white text-sm"><option value="">Whole branch</option>{outlets.filter(o=>!form.branch||(o.branch?._id||o.branch)===form.branch).map(o=><option key={o._id} value={o._id}>{o.name}</option>)}</select><button onClick={prepare} className="bg-blue-900 text-white rounded-xl font-black">Prepare closing</button></div>
+    {prepared&&<div className="bg-white border rounded-xl p-5"><div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4"><Kpi label="System Sales" val={fmt(prepared.expected.total)} Ic={DollarSign} bg="bg-blue-900"/><Kpi label="Transactions" val={prepared.salesCount} Ic={Receipt} bg="bg-blue-700"/><Kpi label="Book Stock" val={fmt(prepared.stockBookValue)} Ic={Package} bg="bg-red-600"/><Kpi label="SKUs Counted" val={prepared.skuCount} Ic={ClipboardList} bg="bg-slate-700"/></div><p className="font-black text-sm mb-3">Physical collection totals</p><div className="grid md:grid-cols-5 gap-3">{['cash','card','mobileMoney','bank','credit'].map(k=><label key={k} className="text-xs font-bold text-gray-500">{k.replace('mobileMoney','Mobile money')}<input type="number" min="0" step="0.01" value={form.counted?.[k]||''} onChange={e=>setForm({...form,counted:{...form.counted,[k]:e.target.value}})} className="mt-1 w-full border rounded-xl p-2"/><span className="block mt-1 text-blue-700">Expected {fmt(prepared.expected[k])}</span></label>)}</div><label className="block text-xs font-bold text-gray-500 mt-3">Physical closing stock value<input type="number" value={form.stockCountValue??prepared.stockBookValue} onChange={e=>setForm({...form,stockCountValue:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><label className="block text-xs font-bold text-gray-500 mt-3">Variance explanation<textarea value={form.explanation||''} onChange={e=>setForm({...form,explanation:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><button onClick={submit} className="mt-4 w-full py-3 bg-red-600 text-white rounded-xl font-black">Submit end-of-day reconciliation</button></div>}
+    <div className="bg-white border rounded-xl overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Date','Branch / Outlet','Expected','Counted','Cash Variance','Stock Variance','Status','Review'].map(h=><th key={h} className="p-3 text-left text-gray-400 uppercase">{h}</th>)}</tr></thead><tbody className="divide-y">{items.map(x=><tr key={x._id}><td className="p-3">{new Date(x.businessDate).toLocaleDateString()}</td><td className="p-3 font-bold">{x.branch?.name} / {x.outlet?.name||'All'}</td><td className="p-3">{fmt(x.expected?.total)}</td><td className="p-3">{fmt(x.counted?.total)}</td><td className={`p-3 font-bold ${x.variance<0?'text-red-600':'text-green-600'}`}>{fmt(x.variance)}</td><td className="p-3">{fmt(x.stockVariance)}</td><td className="p-3"><Bd label={x.status} v={x.status==='approved'?'green':x.status==='queried'?'red':'orange'}/></td><td className="p-3">{canReview&&x.status==='submitted'&&<div className="flex gap-2"><button onClick={()=>api.reviewReconciliation(x._id,{status:'approved'}).then(load)} className="text-green-700 font-bold">Approve</button><button onClick={()=>api.reviewReconciliation(x._id,{status:'queried'}).then(load)} className="text-red-600 font-bold">Query</button></div>}</td></tr>)}</tbody></table></div>
+  </div>;
+}
+
+function WebsiteView() {
+  const [form,setForm]=useState({}),[products,setProducts]=useState([]),[saving,setSaving]=useState(false),[msg,setMsg]=useState(''); useEffect(()=>{Promise.all([api.siteContent(),api.products()]).then(([c,p])=>{setForm(c);setProducts(p.filter(x=>['Tyre','Rim','Battery'].includes(x.category)))})},[]);
+  const upload=(key,file)=>{if(!file)return;if(file.size>1500000){setMsg('Image must be below 1.5 MB');return}const reader=new FileReader();reader.onload=()=>setForm(f=>({...f,[key]:reader.result}));reader.readAsDataURL(file)};
+  const save=async()=>{setSaving(true);try{setForm(await api.updateSiteContent(form));setMsg('Website content published')}catch(x){setMsg(x.message)}finally{setSaving(false)}};
+  return <div className="space-y-5"><div><h2 className="text-xl font-black text-blue-900">Website & Online Store Manager</h2><p className="text-sm text-gray-500">Change company copy, logo and hero image; online products come directly from branch inventory</p></div>{msg&&<p className="text-xs font-bold text-blue-700">{msg}</p>}<div className="grid lg:grid-cols-3 gap-5"><div className="lg:col-span-2 bg-white border rounded-xl p-5 space-y-3">{[['companyName','Company name'],['announcement','Top announcement'],['heroEyebrow','Hero label'],['heroTitle','Main headline'],['heroText','Hero paragraph'],['aboutTitle','About heading'],['aboutText','About paragraph'],['phone','Phone'],['email','Email'],['address','Address']].map(([k,l])=><label key={k} className="block text-xs font-bold text-gray-500">{l}{k.endsWith('Text')?<textarea value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/>:<input value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/>}</label>)}<button onClick={save} disabled={saving} className="w-full py-3 bg-red-600 text-white rounded-xl font-black">{saving?'Publishing…':'Publish website changes'}</button></div><div className="space-y-4"><div className="bg-white border rounded-xl p-4"><p className="font-black text-sm mb-3">Company logo</p>{form.logoUrl&&<img src={form.logoUrl} className="w-full h-32 object-contain border rounded-xl mb-3"/>}<input type="file" accept="image/*" onChange={e=>upload('logoUrl',e.target.files[0])} className="text-xs"/></div><div className="bg-white border rounded-xl p-4"><p className="font-black text-sm mb-3">Hero picture</p>{form.heroImageUrl&&<img src={form.heroImageUrl} className="w-full h-40 object-cover border rounded-xl mb-3"/>}<input type="file" accept="image/*" onChange={e=>upload('heroImageUrl',e.target.files[0])} className="text-xs"/></div><div className="bg-blue-950 text-white rounded-xl p-4"><p className="text-2xl font-black">{products.length}</p><p className="text-xs text-blue-300">Tyres, rims and batteries linked to website</p><p className="text-xs text-blue-300 mt-2">Use Inventory to change product pictures, descriptions, prices and visibility.</p></div></div></div></div>;
+}
+
+const SECTIONS = { dash: DashView, pos: PosView, mkt: MktView, fuel: FuelView, inv: InvView, proc: ProcView, expenses: ExpensesView, fin: FinView, cust: CustView, reconcile: ReconcileView, staff: StaffView, rep: RepView, sett: SettView, website: WebsiteView };
 
 // ─── SHELL ───
 export default function DesktopApp() {
@@ -852,7 +876,8 @@ export default function DesktopApp() {
 
   const rc = ROLE_CONFIG[role];
   const assignmentLabel = user?.outlets?.map(o => o.name).join(', ') || user?.branches?.map(b => b.name).join(', ') || user?.branch?.name || rc.branch;
-  const allowedModules = ROLE_MODULES[role] || [];
+  const permissionModules = { 'staff.view': 'staff', 'staff.manage': 'staff', 'branches.manage': 'sett', 'system.settings.manage': 'sett', 'website.manage': 'website', 'reconciliation.create': 'reconcile', 'reconciliation.review': 'reconcile', 'reports.view': 'rep' };
+  const allowedModules = [...new Set([...(ROLE_MODULES[role] || []), ...(user?.permissions || []).map(p => permissionModules[p]).filter(Boolean)])];
   const navGroups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(i => allowedModules.includes(i.id)) })).filter(g => g.items.length > 0);
   const allNavItems = navGroups.flatMap(g => g.items);
   const activeLabel = allNavItems.find(n => n.id === active)?.label || 'Dashboard';
