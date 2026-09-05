@@ -10,7 +10,7 @@ export function setToken(token) {
 }
 
 async function request(path, { method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = body ? { 'Content-Type': 'application/json' } : {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 

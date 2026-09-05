@@ -1,7 +1,7 @@
 const BASE=import.meta.env.VITE_API_URL||'https://admabsinvestmentlimited-production.up.railway.app/api';
 let token=localStorage.getItem('admabs_mobile_token');
 export const setToken=value=>{token=value;if(value)localStorage.setItem('admabs_mobile_token',value);else localStorage.removeItem('admabs_mobile_token')};
-async function call(path,{method='GET',body}={}){const r=await fetch(`${BASE}${path}`,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});if(!r.ok){let message=`Request failed (${r.status})`;try{message=(await r.json()).error||message}catch{}throw new Error(message)}return r.status===204?null:r.json()}
+async function call(path,{method='GET',body}={}){const r=await fetch(`${BASE}${path}`,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{Authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});if(!r.ok){let message=`Request failed (${r.status})`;try{message=(await r.json()).error||message}catch{}throw new Error(message)}return r.status===204?null:r.json()}
 const query=(path,p={})=>call(`${path}?${new URLSearchParams(Object.fromEntries(Object.entries(p).filter(([,v])=>v!==''&&v!=null)))}`);
 export const api={
  login:(username,password)=>call('/auth/login',{method:'POST',body:{username,password}}),me:()=>call('/auth/me'),logout:()=>call('/auth/logout',{method:'POST'}),heartbeat:()=>call('/sessions/heartbeat',{method:'POST'}),
