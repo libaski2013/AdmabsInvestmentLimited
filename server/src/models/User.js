@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const ROLES = ['super_admin', 'ceo', 'gm', 'finance', 'accountant', 'branch', 'sub_manager', 'staff', 'cashier', 'fuel', 'storekeeper', 'procurement', 'technician', 'auditor'];
+const ROLES = ['super_admin', 'ceo', 'gm', 'finance', 'accountant', 'branch', 'sub_manager', 'staff', 'cashier', 'fuel', 'storekeeper', 'procurement', 'technician', 'driver', 'auditor'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -13,6 +13,10 @@ const userSchema = new mongoose.Schema(
     outlets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Outlet' }],
     permissions: [{ type: String, trim: true }],
     employeeNumber: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    jobTitle: { type: String, trim: true },
+    department: { type: String, trim: true },
+    basicSalary: { type: Number, default: 0, min: 0 },
     lastLoginAt: { type: Date },
     active: { type: Boolean, default: true },
   },

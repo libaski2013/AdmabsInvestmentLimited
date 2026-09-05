@@ -15,7 +15,7 @@ export default async function posRoutes(fastify) {
   });
 
   fastify.post('/api/sales', { preHandler: [fastify.authenticate, fastify.requirePermission('pos.sale.create', 'ceo', 'gm', 'branch', 'sub_manager', 'staff', 'cashier', 'fuel')] }, async (request, reply) => {
-    const { items, paymentMethod, payments, customer, branch, outlet, discount = 0, taxRate = 0.15, channel = 'pos' } = request.body || {};
+    const { items, paymentMethod, payments, customer, branch, outlet, discount = 0, taxRate = 0.15, channel = 'pos', workShift } = request.body || {};
     if (!Array.isArray(items) || items.length === 0) {
       return reply.code(400).send({ error: 'items are required' });
     }
@@ -60,6 +60,7 @@ export default async function posRoutes(fastify) {
       discount,
       taxRate,
       channel,
+      workShift: ['day', 'night'].includes(workShift) ? workShift : (new Date().getHours() >= 18 || new Date().getHours() < 6 ? 'night' : 'day'),
     });
 
     // Decrement stock for items that reference a real product.

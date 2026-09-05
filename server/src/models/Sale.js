@@ -28,6 +28,7 @@ const saleSchema = new mongoose.Schema(
     discount: { type: Number, default: 0 },
     taxRate: { type: Number, default: 0.15 },
     channel: { type: String, enum: ['pos', 'online', 'quotation'], default: 'pos' },
+    workShift: { type: String, enum: ['day', 'night'], default: 'day', index: true },
     status: { type: String, enum: ['draft', 'suspended', 'posted', 'returned', 'voided'], default: 'posted' },
     dailyApprovalStatus: { type: String, enum: ['pending', 'approved', 'queried'], default: 'pending', index: true },
     dailyApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

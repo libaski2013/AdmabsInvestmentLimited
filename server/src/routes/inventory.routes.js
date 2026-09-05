@@ -1,5 +1,18 @@
 import Product from '../models/Product.js';
 import StockMovement from '../models/StockMovement.js';
+import Outlet from '../models/Outlet.js';
+
+const SUPERMARKET_CATEGORIES = ['Grocery', 'Beverages', 'Snacks', 'Household', 'Bakery', 'Dairy'];
+const TYRE_CATEGORIES = ['Tyre', 'Rim', 'Battery', 'Lubricant', 'Service'];
+async function validateOutletCategory(body, reply) {
+  if (!body.outlet) return reply.code(400).send({ error: 'Select the specific outlet that owns this stock' });
+  const outlet = await Outlet.findById(body.outlet).lean();
+  if (!outlet || String(outlet.branch) !== String(body.branch)) return reply.code(400).send({ error: 'Outlet does not belong to the selected branch' });
+  if (outlet.division === 'supermarket' && !SUPERMARKET_CATEGORIES.includes(body.category)) return reply.code(400).send({ error: 'Tyres, rims and batteries cannot be stored in a supermarket outlet' });
+  if (outlet.division === 'tyres' && !TYRE_CATEGORIES.includes(body.category)) return reply.code(400).send({ error: 'Supermarket products cannot be stored in a tyre, rim and battery outlet' });
+  if (!['supermarket', 'tyres', 'warehouse'].includes(outlet.division)) return reply.code(400).send({ error: 'This outlet type does not hold retail product inventory' });
+  return outlet;
+}
 
 export default async function inventoryRoutes(fastify) {
   fastify.get('/api/store/products', async (request) => {
@@ -10,11 +23,15 @@ export default async function inventoryRoutes(fastify) {
     return Product.find(filter).select('code name category price qty icon imageUrl description attributes branch outlet').populate('branch', 'name code').populate('outlet', 'name code').lean();
   });
   fastify.get('/api/products', { preHandler: [fastify.authenticate] }, async (request) => {
-    const { category, low } = request.query || {};
+    const { category, low, q, branch, outlet, allOutlets } = request.query || {};
     const filter = { active: true };
-    Object.assign(filter, fastify.scopeFilter(request));
+    const maySearchAll = ['super_admin', 'ceo', 'gm'].includes(request.user.role) || request.user.permissions?.includes('inventory.search_all');
+    Object.assign(filter, allOutlets === 'true' && maySearchAll ? {} : fastify.scopeFilter(request));
     if (category) filter.category = category;
-    let products = await Product.find(filter).sort({ name: 1 }).lean();
+    if (branch) filter.branch = branch;
+    if (outlet) filter.outlet = outlet;
+    if (q) filter.$or = [{ name: new RegExp(q, 'i') }, { code: new RegExp(q, 'i') }, { barcode: new RegExp(q, 'i') }, { qrCode: new RegExp(q, 'i') }, { 'attributes.brand': new RegExp(q, 'i') }];
+    let products = await Product.find(filter).populate('branch', 'name code').populate('outlet', 'name code division').sort({ name: 1 }).lean();
     if (low === 'true') products = products.filter((p) => p.qty <= p.reorderLevel);
     return products;
   });
@@ -57,6 +74,7 @@ export default async function inventoryRoutes(fastify) {
         if (request.user.outletIds?.length && !request.user.outletIds.includes(String(body.outlet))) return reply.code(403).send({ error: 'Product must belong to an assigned outlet' });
         if (request.user.branchIds?.length && !request.user.branchIds.includes(String(body.branch))) return reply.code(403).send({ error: 'Product must belong to an assigned branch' });
       }
+      const validOutlet = await validateOutletCategory(body, reply); if (!validOutlet || reply.sent) return;
       const product = await Product.create(body);
       return reply.code(201).send(product);
     }
@@ -70,7 +88,11 @@ export default async function inventoryRoutes(fastify) {
         if (request.body?.outlet && !request.user.outletIds?.includes(String(request.body.outlet))) return reply.code(403).send({ error: 'Product must remain within an assigned outlet' });
         if (request.body?.branch && !request.user.branchIds?.includes(String(request.body.branch))) return reply.code(403).send({ error: 'Product must remain within an assigned branch' });
       }
-      const product = await Product.findOneAndUpdate({ _id: request.params.id, ...fastify.scopeFilter(request) }, request.body, { new: true, runValidators: true });
+      const current = await Product.findOne({ _id: request.params.id, ...fastify.scopeFilter(request) }).lean();
+      if (!current) return reply.code(404).send({ error: 'Product not found' });
+      const candidate = { ...current, ...request.body };
+      const validOutlet = await validateOutletCategory(candidate, reply); if (!validOutlet || reply.sent) return;
+      const product = await Product.findByIdAndUpdate(request.params.id, request.body, { new: true, runValidators: true });
       if (!product) return reply.code(404).send({ error: 'Product not found' });
       return product;
     }
