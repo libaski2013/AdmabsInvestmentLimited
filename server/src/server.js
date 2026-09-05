@@ -26,8 +26,9 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import demoRoutes from './routes/demo.routes.js';
 import payrollRoutes from './routes/payroll.routes.js';
 import smsRoutes from './routes/sms.routes.js';
+import toolsRoutes from './routes/tools.routes.js';
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 });
 
 await connectDB(fastify.log);
 
@@ -55,6 +56,7 @@ await fastify.register(analyticsRoutes);
 await fastify.register(demoRoutes);
 await fastify.register(payrollRoutes);
 await fastify.register(smsRoutes);
+await fastify.register(toolsRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
 const currentDir = path.dirname(fileURLToPath(import.meta.url));

@@ -32,6 +32,13 @@ async function request(path, { method = 'GET', body } = {}) {
   return res.json();
 }
 
+async function requestBlob(path) {
+  const headers = {}; const token = getToken(); if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+  if (!res.ok) { let message=`Request failed (${res.status})`; try { const data=await res.json(); if(data?.error)message=data.error; } catch {} throw new Error(message); }
+  return res.blob();
+}
+
 export const api = {
   login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
   me: () => request('/auth/me'),
@@ -115,6 +122,12 @@ export const api = {
   updatePayrollRun: (id, body) => request(`/payroll/runs/${id}`, { method: 'PATCH', body }),
   smsCampaigns: () => request('/sms/campaigns'),
   createSmsCampaign: body => request('/sms/campaigns', { method: 'POST', body }),
+  currencyConvert: params => request(`/tools/currency?${new URLSearchParams(params)}`),
+  backupJson: () => request('/data/backup'),
+  exportExcel: () => requestBlob('/data/export.xlsx'),
+  restoreJson: body => request('/data/restore', { method: 'POST', body }),
+  importExcel: body => request('/data/import.xlsx', { method: 'POST', body }),
+  dataAudit: () => request('/data/audit'),
   demoBatches: () => request('/demo/batches'),
   seedDemoData: body => request('/demo/seed', { method: 'POST', body }),
   deleteDemoBatch: id => request(`/demo/batches/${id}`, { method: 'DELETE' }),
