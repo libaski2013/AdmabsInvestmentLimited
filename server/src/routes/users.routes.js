@@ -7,10 +7,11 @@ export const PERMISSIONS = [
   'procurement.manage', 'expenses.manage', 'accounting.journal.create', 'reports.view',
   'reconciliation.create', 'reconciliation.review', 'website.manage', 'staff.view',
   'staff.manage', 'branches.manage', 'system.settings.manage', 'inventory.search_all',
-  'payroll.manage', 'sms.manage', 'data.manage',
+  'payroll.manage', 'sms.manage', 'data.manage', 'performance.manage',
 ];
 
 export default async function userRoutes(fastify) {
+  fastify.get('/api/users/super-admin-status', { preHandler: [fastify.authenticate] }, async () => ({ exists: Boolean(await User.exists({ role: 'super_admin', active: true })) }));
   fastify.get(
     '/api/users',
     { preHandler: [fastify.authenticate] },
@@ -18,7 +19,7 @@ export default async function userRoutes(fastify) {
       const adminExists = await User.exists({ role: 'super_admin', active: true });
       const allowed = request.user.role === 'super_admin' || request.user.role === 'gm' || request.user.permissions?.includes('staff.view') || (request.user.role === 'ceo' && !adminExists);
       if (!allowed) return reply.code(403).send({ error: 'Staff Directory access must be granted by the Super Admin' });
-      return User.find().select('-passwordHash').populate('branch', 'name').populate('branches', 'name').populate('outlets', 'name division').sort({ name: 1 });
+      return User.find().select('-passwordHash').populate('branch', 'name').populate('branches', 'name').populate('outlets', 'name division runs24Hours').sort({ name: 1 });
     }
   );
 

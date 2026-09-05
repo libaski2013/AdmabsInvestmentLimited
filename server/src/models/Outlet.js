@@ -8,6 +8,7 @@ const outletSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
   allowCreditSales: { type: Boolean, default: false },
   taxRate: { type: Number, default: 0.15, min: 0, max: 1 },
+  runs24Hours: { type: Boolean, default: false },
 }, { timestamps: true });
 
 outletSchema.index({ branch: 1, division: 1 });

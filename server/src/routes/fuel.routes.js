@@ -5,7 +5,7 @@ import FuelDip from '../models/FuelDip.js';
 import FuelDelivery from '../models/FuelDelivery.js';
 import JournalEntry from '../models/JournalEntry.js';
 import '../models/Branch.js';
-import '../models/Outlet.js';
+import Outlet from '../models/Outlet.js';
 import '../models/User.js';
 
 const managerRoles = ['super_admin', 'ceo', 'gm', 'branch', 'sub_manager'];
@@ -71,6 +71,9 @@ export default async function fuelRoutes(fastify) {
   fastify.post('/api/fuel/shifts/open', auth, async (request, reply) => {
     const pump = await FuelPump.findOne({ _id: request.body?.pump, ...fastify.scopeFilter(request) });
     if (!pump || pump.status !== 'active') return reply.code(404).send({ error: 'Active pump not found in your assignment' });
+    const workShift = new Date().getHours() >= 18 || new Date().getHours() < 6 ? 'night' : 'day';
+    const outlet = pump.outlet ? await Outlet.findById(pump.outlet).select('runs24Hours').lean() : null;
+    if (workShift === 'night' && !outlet?.runs24Hours) return reply.code(409).send({ error: 'This filling-station outlet is not configured for 24-hour operation' });
     const nozzle = pump.nozzles.find(n => n.code === String(request.body?.nozzleCode || '').toUpperCase() && n.active);
     if (!nozzle) return reply.code(400).send({ error: 'Select an active nozzle' });
     const existing = await FuelShift.findOne({ pump: pump._id, nozzleCode: nozzle.code, status: 'open' });
@@ -80,7 +83,7 @@ export default async function fuelRoutes(fastify) {
     const shift = await FuelShift.create({
       number: makeNumber('FS'), branch: pump.branch, outlet: pump.outlet, attendant: request.user.id,
       pump: pump._id, nozzleCode: nozzle.code, product: pump.product, openingMeter,
-      pricePerLitre: Number(request.body?.pricePerLitre ?? pump.pricePerLitre), notes: request.body?.notes,
+      pricePerLitre: Number(request.body?.pricePerLitre ?? pump.pricePerLitre), workShift, notes: request.body?.notes,
     });
     return reply.code(201).send(shift);
   });

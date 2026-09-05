@@ -1,6 +1,7 @@
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import JournalEntry from '../models/JournalEntry.js';
+import Outlet from '../models/Outlet.js';
 
 async function nextInvoiceNumber() {
   return `INV-${Date.now()}-${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
@@ -44,6 +45,9 @@ export default async function posRoutes(fastify) {
     if (Math.abs(paid - total) > 0.01) return reply.code(400).send({ error: 'Payment total must equal the sale total' });
     const resolvedBranch = branch || products[0]?.branch;
     const resolvedOutlet = outlet || products[0]?.outlet;
+    const shift = ['day', 'night'].includes(workShift) ? workShift : (new Date().getHours() >= 18 || new Date().getHours() < 6 ? 'night' : 'day');
+    const outletRecord = resolvedOutlet ? await Outlet.findById(resolvedOutlet).select('runs24Hours').lean() : null;
+    if (shift === 'night' && !outletRecord?.runs24Hours) return reply.code(409).send({ error: 'Night-shift sales are disabled for this outlet. Enable 24-hour operation in Company & Branches.' });
 
     const sale = await Sale.create({
       invoiceNumber: await nextInvoiceNumber(),
@@ -60,7 +64,7 @@ export default async function posRoutes(fastify) {
       discount,
       taxRate,
       channel,
-      workShift: ['day', 'night'].includes(workShift) ? workShift : (new Date().getHours() >= 18 || new Date().getHours() < 6 ? 'night' : 'day'),
+      workShift: shift,
     });
 
     // Decrement stock for items that reference a real product.

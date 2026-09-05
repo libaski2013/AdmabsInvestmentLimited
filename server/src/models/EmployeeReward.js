@@ -1,0 +1,3 @@
+import mongoose from 'mongoose';
+const employeeRewardSchema=new mongoose.Schema({employee:{type:mongoose.Schema.Types.ObjectId,ref:'User',required:true,index:true},periodStart:{type:Date,required:true},periodEnd:{type:Date,required:true},title:{type:String,required:true},amount:{type:Number,default:0,min:0},points:{type:Number,default:0,min:0},notes:String,status:{type:String,enum:['approved','paid','cancelled'],default:'approved'},createdBy:{type:mongoose.Schema.Types.ObjectId,ref:'User',required:true},paidAt:Date},{timestamps:true});
+export default mongoose.model('EmployeeReward',employeeRewardSchema);

@@ -9,6 +9,7 @@ const fuelShiftSchema = new mongoose.Schema({
   nozzleCode: { type: String, required: true },
   product: { type: String, required: true },
   openedAt: { type: Date, default: Date.now },
+  workShift: { type: String, enum: ['day', 'night'], default: 'day', index: true },
   closedAt: Date,
   openingMeter: { type: Number, required: true, min: 0 },
   closingMeter: { type: Number, min: 0 },

@@ -23,7 +23,7 @@ export default async function authRoutes(fastify) {
     );
     user.lastLoginAt = new Date();
     await user.save();
-    await user.populate([{ path: 'branches', select: 'name code divisions' }, { path: 'outlets', select: 'name code division branch' }, { path: 'branch', select: 'name code divisions' }]);
+    await user.populate([{ path: 'branches', select: 'name code divisions' }, { path: 'outlets', select: 'name code division branch runs24Hours' }, { path: 'branch', select: 'name code divisions' }]);
     return { token, user: { id: user._id, name: user.name, role: user.role, username: user.username, branch: user.branch, branches: user.branches, outlets: user.outlets, permissions: user.permissions || [] } };
   });
 
