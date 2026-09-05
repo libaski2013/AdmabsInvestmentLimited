@@ -1,0 +1,7 @@
+{
+  "appId": "com.admabs.business",
+  "appName": "ADMABS",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "plugins": { "SplashScreen": { "launchShowDuration": 1800, "backgroundColor": "#061426" } }
+}
