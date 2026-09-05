@@ -5,7 +5,7 @@ import Branch from '../models/Branch.js';
 
 const round = n => Math.round(Number(n || 0) * 100) / 100;
 export default async function analyticsRoutes(fastify) {
-  fastify.get('/api/analytics/financial', { preHandler: [fastify.authenticate, fastify.requirePermission('reports.view', 'ceo', 'gm', 'finance', 'accountant')] }, async (request, reply) => {
+  fastify.get('/api/analytics/financial', { preHandler: [fastify.authenticate, fastify.requirePermission('reports.view', 'ceo', 'gm', 'finance', 'accountant', 'staff', 'cashier')] }, async (request, reply) => {
     if (!['super_admin', 'ceo', 'gm'].includes(request.user.role) && request.query?.branch && !request.user.branchIds?.includes(String(request.query.branch))) return reply.code(403).send({ error: 'Branch is outside your assignment' });
     const end = request.query?.end ? new Date(`${request.query.end}T23:59:59.999Z`) : new Date();
     const start = request.query?.start ? new Date(`${request.query.start}T00:00:00.000Z`) : new Date(end.getFullYear(), end.getMonth() - 5, 1);

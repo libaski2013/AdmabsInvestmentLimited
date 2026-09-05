@@ -61,18 +61,18 @@ const ROLE_MODULES = {
   gm: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'proc', 'expenses', 'fin', 'cust', 'reconcile', 'approvals', 'staff', 'rep', 'sett'],
   finance: ['dash', 'fin', 'expenses', 'reconcile', 'approvals', 'cust', 'rep'],
   branch: ['dash', 'pos', 'mkt', 'inv', 'expenses', 'reconcile', 'staff', 'rep'],
-  staff: ['pos', 'mkt'],
+  staff: ['pos', 'mkt', 'rep'],
   fuel: ['dash', 'fuel', 'expenses'],
   accountant: ['dash', 'fin', 'expenses', 'reconcile', 'cust', 'rep'],
   sub_manager: ['dash', 'pos', 'mkt', 'fuel', 'inv', 'expenses', 'reconcile', 'staff', 'rep'],
-  cashier: ['pos', 'mkt'],
+  cashier: ['pos', 'mkt', 'rep'],
   storekeeper: ['dash', 'inv', 'proc'],
   auditor: ['dash', 'inv', 'expenses', 'fin', 'cust', 'rep'],
 };
 
 const PERMISSION_MODULES = { 'staff.view': 'staff', 'staff.manage': 'staff', 'branches.manage': 'sett', 'system.settings.manage': 'sett', 'website.manage': 'website', 'reconciliation.create': 'reconcile', 'reconciliation.review': 'reconcile', 'reports.view': 'rep', 'inventory.create': 'inv', 'inventory.update': 'inv', 'customers.manage': 'cust', 'procurement.manage': 'proc', 'expenses.manage': 'expenses', 'accounting.journal.create': 'fin', 'pos.sale.create': 'pos' };
 const DIVISION_MODULES = {
-  tyres: ['pos','inv','cust'], supermarket: ['mkt','inv','cust'], fuel: ['fuel','reconcile','expenses'],
+  tyres: ['pos','inv','cust','rep'], supermarket: ['mkt','inv','cust','rep'], fuel: ['fuel','reconcile','expenses'],
   warehouse: ['inv','proc'], head_office: ['dash','fin','expenses','cust','rep','staff','sett','website','approvals'],
 };
 function modulesForUser(account) {
@@ -278,11 +278,14 @@ function usePos(categoryFilter) {
 
 function PosPanel({ title, color, categoryFilter, categories }) {
   const pos = usePos(categoryFilter);
+  const [site, setSite] = useState({});
   const [cat, setCat] = useState('All');
   const [search, setSearch] = useState('');
   const [payMethod, setPayMethod] = useState('Cash');
   const [scanner,setScanner]=useState(false); const [scanError,setScanError]=useState('');
+  useEffect(() => { api.siteContent().then(setSite).catch(() => {}); }, []);
   const filtered = pos.catalog.filter(p => (cat === 'All' || p.cat === cat) && (!search || p.n.toLowerCase().includes(search.toLowerCase())));
+  const printReceipt = () => { document.body.classList.add('printing-receipt'); window.print(); setTimeout(() => document.body.classList.remove('printing-receipt'), 250); };
 
   if (pos.done) {
     const r = pos.done;
@@ -293,16 +296,20 @@ function PosPanel({ title, color, categoryFilter, categories }) {
             <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2"><Check size={22} className="text-white" /></div>
             <p className="font-black text-green-800">{r.invoiceNumber}</p>
           </div>
-          <div className="border border-dashed border-gray-200 rounded-xl p-4 font-mono text-xs bg-gray-50 space-y-1">
-            <p className="text-center font-black text-blue-900 mb-2">ADMABS</p>
+          <div className="receipt-print border border-dashed border-gray-200 rounded-xl p-4 font-mono text-xs bg-gray-50 space-y-1">
+            <div className="text-center mb-3">{site.logoUrl ? <img src={site.logoUrl} alt="Company logo" className="h-14 max-w-40 object-contain mx-auto mb-1" /> : <div className="w-12 h-12 bg-blue-900 text-white rounded-xl mx-auto flex items-center justify-center text-xl font-black mb-1">A</div>}<p className="font-black text-blue-900">{site.companyName || 'ADMABS INVESTMENT LIMITED'}</p><p className="text-gray-500">SALES RECEIPT</p></div>
+            <div className="flex justify-between"><span>Invoice</span><b>{r.invoiceNumber}</b></div>
+            <div className="flex justify-between"><span>Date</span><span>{new Date(r.createdAt || Date.now()).toLocaleString()}</span></div>
             {r.items.map((i, j) => <div key={j} className="flex justify-between"><span>{i.n} ×{i.qty}</span><span className="font-bold">{fmt(i.price * i.qty)}</span></div>)}
             <div className="border-t border-dashed border-gray-200 pt-1 mt-1">
               <div className="flex justify-between"><span>VAT 15%</span><span>{fmt(r.vat)}</span></div>
+              <div className="flex justify-between"><span>Payment</span><span>{r.paymentMethod}</span></div>
               <div className="flex justify-between font-black"><span>TOTAL</span><span>{fmt(r.total)}</span></div>
             </div>
+            {(site.phone || site.email || site.address) && <div className="text-center text-gray-500 pt-2 mt-2 border-t border-dashed"><p>{site.address}</p><p>{[site.phone, site.email].filter(Boolean).join(' · ')}</p></div>}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button className="flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-600"><Printer size={13} /> Print</button>
+            <button onClick={printReceipt} className="flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-600"><Printer size={13} /> Print</button>
             <button onClick={() => pos.setDone(null)} className={`py-2.5 ${color} rounded-xl text-xs font-bold text-white`}>New Sale</button>
           </div>
         </div>
@@ -724,6 +731,7 @@ function FinView() {
 // ─── STAFF DIRECTORY ───
 function StaffView({ user }) {
   const [users, setUsers] = useState([]);
+  const [view, setView] = useState('thumbnail');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [modal,setModal]=useState(null); const [form,setForm]=useState({role:'staff',permissions:[],branches:[],outlets:[]}); const [branches,setBranches]=useState([]); const [outlets,setOutlets]=useState([]); const [permissions,setPermissions]=useState([]);
@@ -733,21 +741,21 @@ function StaffView({ user }) {
   const save=async e=>{e.preventDefault();setErr('');try{const body={...form,branch:form.branch||undefined,branches:form.branch?[form.branch]:[],outlets:form.outlets||[]};modal==='new'?await api.createUser(body):await api.updateUser(modal._id,body);setModal(null);await load();}catch(x){setErr(x.message);}};
   return (
     <div className="space-y-5">
-      <div className="flex justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Staff, Roles & Permissions</h2><p className="text-sm text-gray-500">Assign people to branches, outlets and only the controls they need</p></div>{(canManage||canBootstrap)&&<button onClick={()=>{setModal('new');setForm({role:canBootstrap?'super_admin':'staff',permissions:[],outlets:[]});}} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">{canBootstrap?'Create Super Admin':'+ Add Staff'}</button>}</div>
+      <div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Staff, Roles & Permissions</h2><p className="text-sm text-gray-500">Assign people to branches, outlets and only the controls they need</p></div><div className="flex gap-2"><div className="flex border rounded-xl bg-white p-1"><button onClick={()=>setView('thumbnail')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view==='thumbnail'?'bg-blue-900 text-white':'text-gray-500'}`}>▦ Thumbnails</button><button onClick={()=>setView('list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view==='list'?'bg-blue-900 text-white':'text-gray-500'}`}>☰ List</button></div>{(canManage||canBootstrap)&&<button onClick={()=>{setModal('new');setForm({role:canBootstrap?'super_admin':'staff',permissions:[],outlets:[]});}} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">{canBootstrap?'Create Super Admin':'+ Add Staff'}</button>}</div></div>
       {canBootstrap&&<div className="bg-orange-50 border border-orange-200 text-orange-800 rounded-xl p-3 text-xs"><b>One-time setup:</b> create the independent Super Admin account. After this, only that account can manage users, roles and system access.</div>}
       {err && <p className="text-xs text-red-600">{err === 'Forbidden' ? "Your role doesn't have access to the staff directory." : err}</p>}
       {loading ? <p className="text-xs text-gray-400">Loading…</p> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className={view==='thumbnail'?'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3':'bg-white border rounded-xl divide-y overflow-hidden'}>
           {users.map(u => {
             const rc = ROLE_CONFIG[u.role];
             return (
-              <div key={u._id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <div key={u._id} className={view==='thumbnail'?'bg-white rounded-xl border border-gray-100 shadow-sm p-4':'px-4 py-3 flex flex-wrap items-center gap-4'}>
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 ${rc?.color || 'bg-gray-500'} rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0`}>{initialsOf(u.name)}</div>
-                  <div><p className="text-sm font-bold text-gray-800">{u.name}</p><p className="text-xs text-gray-500 mt-0.5">{rc?.label || u.role}</p><p className="text-xs text-gray-400 mt-0.5">{u.branch?.name || '—'}</p></div>
+                  <div className="min-w-48"><p className="text-sm font-bold text-gray-800">{u.name}</p><p className="text-xs text-gray-500 mt-0.5">{rc?.label || u.role}</p><p className="text-xs text-gray-400 mt-0.5">{u.branch?.name || '—'}</p></div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-50 flex justify-between items-center text-xs"><span className="text-gray-400">{u.username}</span><Bd label={u.active ? 'Active' : 'Inactive'} v={u.active ? 'green' : 'red'} /></div>
-                {canManage&&u.role!=='super_admin'&&<button onClick={()=>{setModal(u);setForm({...u,branch:u.branch?._id||'',branches:(u.branches||[]).map(b=>b._id),outlets:(u.outlets||[]).map(o=>o._id),password:''});}} className="mt-3 w-full border border-blue-100 text-blue-800 rounded-lg py-2 text-xs font-bold">Edit access</button>}
+                <div className={view==='thumbnail'?'mt-3 pt-3 border-t border-gray-50 flex justify-between items-center text-xs':'flex-1 min-w-52 flex justify-between items-center text-xs gap-4'}><span className="text-gray-400">{u.username}</span><Bd label={u.active ? 'Active' : 'Inactive'} v={u.active ? 'green' : 'red'} /></div>
+                {canManage&&u.role!=='super_admin'&&<button onClick={()=>{setModal(u);setForm({...u,branch:u.branch?._id||'',branches:(u.branches||[]).map(b=>b._id),outlets:(u.outlets||[]).map(o=>o._id),password:''});}} className={view==='thumbnail'?'mt-3 w-full border border-blue-100 text-blue-800 rounded-lg py-2 text-xs font-bold':'border border-blue-100 text-blue-800 rounded-lg px-4 py-2 text-xs font-bold'}>Edit access</button>}
               </div>
             );
           })}
@@ -763,9 +771,10 @@ function RepView() {
   const now=new Date(), six=new Date(now.getFullYear(),now.getMonth()-5,1);
   const [filters,setFilters]=useState({start:six.toISOString().slice(0,10),end:now.toISOString().slice(0,10),branch:'',product:''}); const [d,setD]=useState(null); const [branches,setBranches]=useState([]); const [err,setErr]=useState('');
   const load=()=>api.financialAnalytics(Object.fromEntries(Object.entries(filters).filter(([,v])=>v))).then(setD).catch(e=>setErr(e.message));
+  const exportCsv=()=>{if(!d)return;const rows=[['Period','Revenue','Cost of Goods','Gross Profit'],...(d.monthly||[]).map(x=>[x.month,x.revenue,x.cogs,x.profit]),[],['Summary','Amount'],['Revenue',d.summary?.revenue],['Gross Profit',d.summary?.grossProfit],['Expenses',d.summary?.expenses],['Net Profit',d.summary?.netProfit]];const csv=rows.map(row=>row.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));const a=document.createElement('a');a.href=url;a.download=`admabs-report-${filters.start}-${filters.end}.csv`;a.click();URL.revokeObjectURL(url)};
   useEffect(()=>{load();api.branches().then(setBranches).catch(()=>{});},[]);
   const chart=[...(d?.monthly||[]).map(x=>({month:x.month,actual:x.revenue})),...(d?.forecast||[]).map(x=>({month:x.month,forecast:x.forecast,low:x.low,high:x.high}))];
-  return <div className="space-y-5"><div><h2 className="text-xl font-black text-blue-900">Financial Analytics & Forecast</h2><p className="text-sm text-gray-500">Filter actual sales, margins, branches and products; forecast uses recent weighted growth with a ±15% range</p></div>
+  return <div className="space-y-5"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Financial Analytics & Forecast</h2><p className="text-sm text-gray-500">Filter actual sales, margins, branches and products; forecast uses recent weighted growth with a ±15% range</p></div><div className="flex gap-2"><button onClick={exportCsv} disabled={!d} className="px-3 py-2 border border-blue-200 text-blue-900 rounded-xl text-xs font-bold disabled:opacity-40">Download CSV</button><button onClick={()=>window.print()} className="px-3 py-2 bg-blue-900 text-white rounded-xl text-xs font-bold"><Printer size={13} className="inline mr-1"/>Print report</button></div></div>
     <div className="bg-white border rounded-xl p-4 grid md:grid-cols-5 gap-3"><input type="date" value={filters.start} onChange={e=>setFilters({...filters,start:e.target.value})} className="border rounded-xl p-2 text-sm"/><input type="date" value={filters.end} onChange={e=>setFilters({...filters,end:e.target.value})} className="border rounded-xl p-2 text-sm"/><select value={filters.branch} onChange={e=>setFilters({...filters,branch:e.target.value})} className="border rounded-xl p-2 text-sm bg-white"><option value="">All branches</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={filters.product} onChange={e=>setFilters({...filters,product:e.target.value})} className="border rounded-xl p-2 text-sm bg-white"><option value="">All products</option>{(d?.products||[]).map(p=><option key={p._id} value={p._id}>{p.name}</option>)}</select><button onClick={load} className="bg-blue-900 text-white rounded-xl font-black text-sm">Apply filters</button></div>{err&&<p className="text-red-600 text-xs">⚠ {err}</p>}
     <div className="grid grid-cols-2 lg:grid-cols-6 gap-3"><Kpi label="Revenue" val={fmt(d?.summary?.revenue)} Ic={TrendingUp} bg="bg-blue-900"/><Kpi label="Gross Profit" val={fmt(d?.summary?.grossProfit)} Ic={Wallet} bg="bg-blue-700"/><Kpi label="Expenses" val={fmt(d?.summary?.expenses)} Ic={Receipt} bg="bg-red-600"/><Kpi label="Net Profit" val={fmt(d?.summary?.netProfit)} Ic={Star} bg="bg-blue-600"/><Kpi label="Inventory Value" val={fmt(d?.summary?.inventoryValue)} Ic={Package} bg="bg-slate-700"/><Kpi label="Forecast Growth" val={`${d?.summary?.forecastGrowthPercent||0}%`} Ic={BarChart2} bg="bg-purple-700"/></div>
     <div className="bg-white rounded-xl border p-5"><h3 className="font-black text-blue-950 mb-4">Actual Revenue and Three-Month Forecast</h3><ResponsiveContainer width="100%" height={300}><AreaChart data={chart}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}}/><Tooltip formatter={v=>fmt(v)}/><Legend/><Area type="monotone" dataKey="actual" name="Actual revenue" stroke="#1e3a8a" fill="#dbeafe" strokeWidth={3}/><Area type="monotone" dataKey="forecast" name="Forecast" stroke="#dc2626" fill="#fee2e2" strokeDasharray="6 4" strokeWidth={3}/><Area type="monotone" dataKey="high" name="High case" stroke="#16a34a" fill="none"/><Area type="monotone" dataKey="low" name="Low case" stroke="#f59e0b" fill="none"/></AreaChart></ResponsiveContainer></div>
