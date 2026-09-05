@@ -28,6 +28,7 @@ import payrollRoutes from './routes/payroll.routes.js';
 import smsRoutes from './routes/sms.routes.js';
 import toolsRoutes from './routes/tools.routes.js';
 import performanceRoutes from './routes/performance.routes.js';
+import workforceRoutes from './routes/workforce.routes.js';
 
 const fastify = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 });
 
@@ -59,6 +60,7 @@ await fastify.register(payrollRoutes);
 await fastify.register(smsRoutes);
 await fastify.register(toolsRoutes);
 await fastify.register(performanceRoutes);
+await fastify.register(workforceRoutes);
 
 fastify.get('/api/health', async () => ({ ok: true }));
 const currentDir = path.dirname(fileURLToPath(import.meta.url));

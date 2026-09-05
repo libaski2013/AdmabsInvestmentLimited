@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import '../models/Outlet.js';
+import AppSession from '../models/AppSession.js';
+import { randomUUID } from 'node:crypto';
 
 export default async function authRoutes(fastify) {
   fastify.post('/api/auth/login', async (request, reply) => {
@@ -17,14 +19,17 @@ export default async function authRoutes(fastify) {
 
     const branchIds = [...new Set([user.branch, ...(user.branches || [])].filter(Boolean).map(String))];
     const outletIds = (user.outlets || []).map(String);
+    const sessionId = randomUUID();
+    const now = new Date();
     const token = fastify.jwt.sign(
-      { id: user._id.toString(), role: user.role, name: user.name, branchIds, outletIds, permissions: user.permissions || [] },
+      { id: user._id.toString(), role: user.role, name: user.name, branchIds, outletIds, permissions: user.permissions || [], sessionId },
       { expiresIn: '12h' }
     );
-    user.lastLoginAt = new Date();
+    await AppSession.create({ sessionId, user: user._id, branchIds, outletIds, loggedInAt: now, lastSeenAt: now, expiresAt: new Date(now.getTime() + 12 * 60 * 60 * 1000), ipAddress: request.ip, userAgent: String(request.headers['user-agent'] || '').slice(0, 500) });
+    user.lastLoginAt = now;
     await user.save();
     await user.populate([{ path: 'branches', select: 'name code divisions' }, { path: 'outlets', select: 'name code division branch runs24Hours' }, { path: 'branch', select: 'name code divisions' }]);
-    return { token, user: { id: user._id, name: user.name, role: user.role, username: user.username, branch: user.branch, branches: user.branches, outlets: user.outlets, permissions: user.permissions || [] } };
+    return { token, serverTime: now.toISOString(), timeZone: 'Africa/Accra', user: { id: user._id, name: user.name, role: user.role, username: user.username, branch: user.branch, branches: user.branches, outlets: user.outlets, permissions: user.permissions || [] } };
   });
 
   fastify.get('/api/auth/me', { preHandler: [fastify.authenticate] }, async (request) => {

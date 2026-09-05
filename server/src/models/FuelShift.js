@@ -10,6 +10,7 @@ const fuelShiftSchema = new mongoose.Schema({
   product: { type: String, required: true },
   openedAt: { type: Date, default: Date.now },
   workShift: { type: String, enum: ['day', 'night'], default: 'day', index: true },
+  schedule: { type: mongoose.Schema.Types.ObjectId, ref: 'ShiftSchedule' },
   closedAt: Date,
   openingMeter: { type: Number, required: true, min: 0 },
   closingMeter: { type: Number, min: 0 },

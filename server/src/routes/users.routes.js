@@ -8,6 +8,7 @@ export const PERMISSIONS = [
   'reconciliation.create', 'reconciliation.review', 'website.manage', 'staff.view',
   'staff.manage', 'branches.manage', 'system.settings.manage', 'inventory.search_all',
   'payroll.manage', 'sms.manage', 'data.manage', 'performance.manage',
+  'shifts.manage', 'attendance.view',
 ];
 
 export default async function userRoutes(fastify) {

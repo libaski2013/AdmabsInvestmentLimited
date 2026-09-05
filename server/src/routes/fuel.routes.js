@@ -7,6 +7,8 @@ import JournalEntry from '../models/JournalEntry.js';
 import '../models/Branch.js';
 import Outlet from '../models/Outlet.js';
 import '../models/User.js';
+import ShiftSchedule from '../models/ShiftSchedule.js';
+import { availableSchedule } from './workforce.routes.js';
 
 const managerRoles = ['super_admin', 'ceo', 'gm', 'branch', 'sub_manager'];
 const makeNumber = prefix => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
@@ -71,8 +73,12 @@ export default async function fuelRoutes(fastify) {
   fastify.post('/api/fuel/shifts/open', auth, async (request, reply) => {
     const pump = await FuelPump.findOne({ _id: request.body?.pump, ...fastify.scopeFilter(request) });
     if (!pump || pump.status !== 'active') return reply.code(404).send({ error: 'Active pump not found in your assignment' });
-    const workShift = new Date().getHours() >= 18 || new Date().getHours() < 6 ? 'night' : 'day';
     const outlet = pump.outlet ? await Outlet.findById(pump.outlet).select('runs24Hours').lean() : null;
+    const configuredSchedules = pump.outlet ? await ShiftSchedule.countDocuments({ outlet: pump.outlet, division: 'fuel', active: true }) : 0;
+    const schedule = configuredSchedules ? await availableSchedule(request.user, 'fuel', pump.outlet) : null;
+    if (configuredSchedules && !schedule) return reply.code(409).send({ error: 'No scheduled fuel shift is currently open for you. Ask the Super Admin to check the schedule.' });
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Accra', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+    const workShift = schedule?.workShift || (hour >= 18 || hour < 6 ? 'night' : 'day');
     if (workShift === 'night' && !outlet?.runs24Hours) return reply.code(409).send({ error: 'This filling-station outlet is not configured for 24-hour operation' });
     const nozzle = pump.nozzles.find(n => n.code === String(request.body?.nozzleCode || '').toUpperCase() && n.active);
     if (!nozzle) return reply.code(400).send({ error: 'Select an active nozzle' });
@@ -83,7 +89,7 @@ export default async function fuelRoutes(fastify) {
     const shift = await FuelShift.create({
       number: makeNumber('FS'), branch: pump.branch, outlet: pump.outlet, attendant: request.user.id,
       pump: pump._id, nozzleCode: nozzle.code, product: pump.product, openingMeter,
-      pricePerLitre: Number(request.body?.pricePerLitre ?? pump.pricePerLitre), workShift, notes: request.body?.notes,
+      pricePerLitre: Number(request.body?.pricePerLitre ?? pump.pricePerLitre), workShift, schedule: schedule?._id, notes: request.body?.notes,
     });
     return reply.code(201).send(shift);
   });

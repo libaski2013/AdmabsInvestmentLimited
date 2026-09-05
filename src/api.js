@@ -42,6 +42,9 @@ async function requestBlob(path) {
 export const api = {
   login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
   me: () => request('/auth/me'),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+  heartbeat: () => request('/sessions/heartbeat', { method: 'POST' }),
+  serverTime: () => request('/time'),
 
   dashboard: () => request('/dashboard'),
   storeProducts: (params = {}) => {
@@ -132,6 +135,15 @@ export const api = {
   performance: params => request(`/performance?${new URLSearchParams(params)}`),
   createReward: body => request('/performance/rewards', { method: 'POST', body }),
   updateReward: (id, body) => request(`/performance/rewards/${id}`, { method: 'PATCH', body }),
+  activeSessions: () => request('/attendance/active'),
+  attendanceHistory: (days = 7) => request(`/attendance/history?days=${days}`),
+  shiftSchedules: () => request('/shift-schedules'),
+  createShiftSchedule: body => request('/shift-schedules', { method: 'POST', body }),
+  updateShiftSchedule: (id, body) => request(`/shift-schedules/${id}`, { method: 'PATCH', body }),
+  workShifts: () => request('/work-shifts'),
+  startWorkShift: body => request('/work-shifts/start', { method: 'POST', body }),
+  closeWorkShift: (id, body) => request(`/work-shifts/${id}/close`, { method: 'PATCH', body }),
+  reviewWorkShift: (id, body) => request(`/work-shifts/${id}/review`, { method: 'PATCH', body }),
   demoBatches: () => request('/demo/batches'),
   seedDemoData: body => request('/demo/seed', { method: 'POST', body }),
   deleteDemoBatch: id => request(`/demo/batches/${id}`, { method: 'DELETE' }),
