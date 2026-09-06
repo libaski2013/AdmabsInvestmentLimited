@@ -40,7 +40,7 @@ jobs:
           sed -i 's/versionName "1.0"/versionName "1.2.0"/' android/app/build.gradle
           for spec in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             density=${spec%%:*}; size=${spec##*:}
-            convert public/admabs-app-icon.png -background white -alpha remove -alpha off -resize ${size}x${size} -gravity center -extent ${size}x${size} android/app/src/main/res/mipmap-${density}/ic_launcher.png
+            cp android-icons/icon-${size}.png android/app/src/main/res/mipmap-${density}/ic_launcher.png
             cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
             cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_foreground.png
           done
