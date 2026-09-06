@@ -36,16 +36,18 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+          sed -i 's/versionCode 1/versionCode 11/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "1.1.0"/' android/app/build.gradle
       - name: Build debug APK
         working-directory: mobile-app/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
       - name: Name APK
-        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk ADMABS-Mobile-v1.0.apk
+        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk ADMABS-Mobile-v1.1.0.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: ADMABS-Mobile-APK
-          path: ADMABS-Mobile-v1.0.apk
+          name: ADMABS-Mobile-v1.1.0-APK
+          path: ADMABS-Mobile-v1.1.0.apk
           if-no-files-found: error
           retention-days: 30

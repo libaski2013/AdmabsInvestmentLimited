@@ -198,6 +198,11 @@ const PERMISSION_MODULES = {
   "attendance.view": "attendance",
   "shifts.manage": "attendance",
 };
+const MODULE_ORDER = [
+  "dash", "pos", "market", "fuel", "inventory", "procurement", "expenses",
+  "finance", "customers", "reconcile", "approvals", "staff", "reports",
+  "company", "website", "payroll", "sms", "tools", "performance", "attendance",
+];
 const NAV = {
   dash: ["Dashboard", "📊"],
   pos: ["Tyre POS", "🛒"],
@@ -2459,6 +2464,7 @@ export default function App() {
       .filter(Boolean),
   ];
   mods = [...new Set(mods)];
+  mods.sort((a, b) => MODULE_ORDER.indexOf(a) - MODULE_ORDER.indexOf(b));
   const divisions = [...new Set((user.outlets || []).map((x) => x.division))];
   if (!["super_admin", "ceo", "gm"].includes(user.role) && divisions.length)
     mods = mods.filter(
@@ -2563,6 +2569,9 @@ export default function App() {
                 {NAV[id][0]}
               </button>
             ))}
+            <p className="muted center" style={{ padding: "10px 4px" }}>
+              ADMABS Mobile v1.1.0 · {mods.length} authorized modules
+            </p>
             <button className="nav danger" onClick={logout}>
               ↪ Sign out
             </button>
