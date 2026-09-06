@@ -36,18 +36,24 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
-          sed -i 's/versionCode 1/versionCode 11/' android/app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "1.1.0"/' android/app/build.gradle
+          sed -i 's/versionCode 1/versionCode 12/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "1.2.0"/' android/app/build.gradle
+          for spec in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            density=${spec%%:*}; size=${spec##*:}
+            convert public/admabs-app-icon.png -background white -alpha remove -alpha off -resize ${size}x${size} -gravity center -extent ${size}x${size} android/app/src/main/res/mipmap-${density}/ic_launcher.png
+            cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_round.png
+            cp android/app/src/main/res/mipmap-${density}/ic_launcher.png android/app/src/main/res/mipmap-${density}/ic_launcher_foreground.png
+          done
       - name: Build debug APK
         working-directory: mobile-app/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
       - name: Name APK
-        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk ADMABS-Mobile-v1.1.0.apk
+        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk ADMABS-Mobile-v1.2.0.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: ADMABS-Mobile-v1.1.0-APK
-          path: ADMABS-Mobile-v1.1.0.apk
+          name: ADMABS-Mobile-v1.2.0-APK
+          path: ADMABS-Mobile-v1.2.0.apk
           if-no-files-found: error
           retention-days: 30

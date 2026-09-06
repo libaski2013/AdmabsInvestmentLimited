@@ -248,7 +248,7 @@ function Login({ onLogin }) {
   return (
     <div className="login">
       <form className="loginbox" onSubmit={go}>
-        <div className="hero-logo">A</div>
+        <img className="hero-logo" src="/admabs-app-icon.png" alt="ADMABS" />
         <div className="center">
           <h1>ADMABS</h1>
           <p className="muted">MOBILE BUSINESS PLATFORM</p>
@@ -548,7 +548,7 @@ function POS({ user, market = false }) {
       {done && (
         <Modal title="Transaction complete" onClose={() => setDone(null)}>
           <div className="center">
-            <div className="hero-logo">A</div>
+            <img className="receipt-logo" src="/admabs-logo.png" alt="ADMABS Investments Ltd." />
             <h2>ADMABS INVESTMENT LIMITED</h2>
             <p>{done.invoiceNumber}</p>
             <h1>{money(done.total)}</h1>
@@ -2510,7 +2510,7 @@ export default function App() {
         <button className="btn outline" onClick={() => setDrawer(true)}>
           ☰
         </button>
-        <div className="logo">A</div>
+        <img className="logo" src="/admabs-app-icon.png" alt="ADMABS" />
         <div className="grow">
           <p className="title">{NAV[screen]?.[0] || "ADMABS"}</p>
           <p className="muted">
@@ -2549,7 +2549,7 @@ export default function App() {
         <div className="drawer" onClick={() => setDrawer(false)}>
           <nav onClick={(e) => e.stopPropagation()}>
             <div className="row">
-              <div className="logo">A</div>
+              <img className="logo" src="/admabs-app-icon.png" alt="ADMABS" />
               <div>
                 <b>{user.name}</b>
                 <p className="muted">{CONFIG[user.role]?.label}</p>
@@ -2570,7 +2570,7 @@ export default function App() {
               </button>
             ))}
             <p className="muted center" style={{ padding: "10px 4px" }}>
-              ADMABS Mobile v1.1.0 · {mods.length} authorized modules
+              ADMABS Mobile v1.2.0 · {mods.length} authorized modules
             </p>
             <button className="nav danger" onClick={logout}>
               ↪ Sign out

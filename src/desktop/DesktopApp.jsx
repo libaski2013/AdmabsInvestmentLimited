@@ -174,7 +174,7 @@ function LoginScreen({ onLogin }) {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-xl">A</div>
+            <img src="/admabs-app-icon.png" alt="ADMABS" className="w-14 h-14 rounded-2xl object-contain bg-white p-1 shadow-xl" />
             <div><p className="text-white font-black text-3xl tracking-widest">ADMABS</p><p className="text-blue-300 text-xs tracking-widest">INTEGRATED BUSINESS PLATFORM</p></div>
           </div>
           <p className="text-blue-200 text-sm mt-3">Secure staff access</p>
@@ -321,7 +321,7 @@ function PosPanel({ title, color, categoryFilter, categories, user, shiftControl
             <p className="font-black text-green-800">{r.invoiceNumber}</p>
           </div>
           <div className="receipt-print border border-dashed border-gray-200 rounded-xl p-4 font-mono text-xs bg-gray-50 space-y-1">
-            <div className="text-center mb-3">{site.logoUrl ? <img src={site.logoUrl} alt="Company logo" className="h-14 max-w-40 object-contain mx-auto mb-1" /> : <div className="w-12 h-12 bg-blue-900 text-white rounded-xl mx-auto flex items-center justify-center text-xl font-black mb-1">A</div>}<p className="font-black text-blue-900">{site.companyName || 'ADMABS INVESTMENT LIMITED'}</p><p className="text-gray-500">SALES RECEIPT</p></div>
+            <div className="text-center mb-3"><img src={site.logoUrl || '/admabs-logo.png'} alt="ADMABS Investments Ltd." className="h-14 max-w-56 object-contain mx-auto mb-1" /><p className="font-black text-blue-900">{site.companyName || 'ADMABS INVESTMENTS LTD.'}</p><p className="text-gray-500">SALES RECEIPT</p></div>
             <div className="flex justify-between"><span>Invoice</span><b>{r.invoiceNumber}</b></div>
             <div className="flex justify-between"><span>Date</span><span>{new Date(r.createdAt || Date.now()).toLocaleString()}</span></div>
             <div className="flex justify-between"><span>Shift</span><span className="capitalize">{r.workShift || 'day'}</span></div>
@@ -1016,7 +1016,7 @@ export default function DesktopApp() {
     <div className="flex h-screen bg-gray-50 overflow-hidden" style={{ fontFamily: 'system-ui,-apple-system,sans-serif' }}>
       <aside className={`${sideOpen ? 'w-60' : 'w-16'} bg-blue-900 flex flex-col flex-shrink-0 transition-all duration-300 overflow-hidden`}>
         <div className={`flex items-center gap-2.5 px-3 py-4 border-b border-blue-800 flex-shrink-0 ${!sideOpen ? 'justify-center' : ''}`}>
-          <div className="w-8 h-8 bg-red-600 rounded-xl flex items-center justify-center font-black text-white text-sm flex-shrink-0 shadow-lg">A</div>
+          <img src="/admabs-app-icon.png" alt="ADMABS" className="w-9 h-9 rounded-xl object-contain bg-white p-0.5 flex-shrink-0 shadow-lg" />
           {sideOpen && <div><p className="font-black text-white text-sm tracking-widest leading-none">ADMABS</p><p className="text-blue-400 text-xs mt-0.5">Business Platform</p></div>}
         </div>
         {sideOpen && (
