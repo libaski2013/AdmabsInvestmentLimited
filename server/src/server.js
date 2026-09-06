@@ -34,8 +34,16 @@ const fastify = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 });
 
 await connectDB(fastify.log);
 
+const configuredOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(value => value.trim()).filter(Boolean)
+  : [];
+const nativeOrigins = new Set(['capacitor://localhost', 'https://localhost', 'http://localhost']);
 await fastify.register(cors, {
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(value => value.trim()) : true,
+  origin(origin, callback) {
+    const localDevelopment = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
+    const allowed = !origin || !configuredOrigins.length || configuredOrigins.includes(origin) || nativeOrigins.has(origin) || localDevelopment;
+    callback(null, allowed);
+  },
 });
 await fastify.register(authPlugin);
 
