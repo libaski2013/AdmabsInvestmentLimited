@@ -1,0 +1,51 @@
+name: Build ADMABS Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile-app/**'
+      - '.github/workflows/build-mobile-apk.yml'
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install mobile dependencies
+        working-directory: mobile-app
+        run: npm install
+      - name: Build mobile web assets
+        working-directory: mobile-app
+        env:
+          VITE_API_URL: https://admabsinvestmentlimited-production.up.railway.app/api
+        run: npm run build
+      - name: Generate and sync Android project
+        working-directory: mobile-app
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Build debug APK
+        working-directory: mobile-app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Name APK
+        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk ADMABS-Mobile-v1.0.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ADMABS-Mobile-APK
+          path: ADMABS-Mobile-v1.0.apk
+          if-no-files-found: error
+          retention-days: 30
