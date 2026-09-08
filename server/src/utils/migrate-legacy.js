@@ -140,15 +140,14 @@ async function migrate() {
       locationMap.set(warehouse.id, { branch, outlet });
     }
 
-    let created = 0;
-    let updated = 0;
-    for (const product of rows) {
+    const existingImports = await Product.find({ 'legacySource.system': legacySystem }).select('legacySource').lean();
+    const existingKeys = new Set(existingImports.map(product => `${product.legacySource?.warehouseId}|${product.legacySource?.productId}`));
+    const operations = rows.map(product => {
       const location = locationMap.get(product.warehouseId);
       if (!location) throw new Error(`No mapped location for legacy warehouse ${product.warehouseId}`);
       const category = categoryFor(product);
       const filter = { 'legacySource.system': legacySystem, 'legacySource.warehouseId': product.warehouseId, 'legacySource.productId': product.legacyId };
-      const exists = await Product.exists(filter);
-      await Product.findOneAndUpdate(filter, { $set: {
+      return { updateOne: { filter, update: { $set: {
         code: product.code.trim(), name: product.name.trim(), category,
         qty: number(product.quantity), reorderLevel: number(product.alertQuantity),
         price: number(product.price), cost: number(product.cost),
@@ -160,9 +159,11 @@ async function migrate() {
         description: `Imported from ${product.warehouseName}; legacy product ${product.legacyId}`,
         legacySource: { system: legacySystem, productId: product.legacyId, warehouseId: product.warehouseId, warehouseName: product.warehouseName, importedAt },
         active: true,
-      } }, { upsert: true, new: true, runValidators: true });
-      exists ? updated++ : created++;
-    }
+      } }, upsert: true } };
+    });
+    await Product.bulkWrite(operations, { ordered: false });
+    const updated = rows.filter(product => existingKeys.has(`${product.warehouseId}|${product.legacyId}`)).length;
+    const created = rows.length - updated;
     summary.imported = { branches: locationMap.size, outlets: locationMap.size, productsCreated: created, productsUpdated: updated };
     await MigrationRun.findOneAndUpdate({ key: migrationKey }, { $set: { status: 'completed', summary } });
     return summary;
