@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed": "node src/utils/seed.js"
+    "seed": "node src/utils/seed.js",
+    "migrate:legacy": "node src/utils/migrate-legacy.js",
+    "migrate:legacy:apply": "node src/utils/migrate-legacy.js --apply"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

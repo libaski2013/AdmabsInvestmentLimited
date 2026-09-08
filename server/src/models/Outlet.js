@@ -9,6 +9,7 @@ const outletSchema = new mongoose.Schema({
   allowCreditSales: { type: Boolean, default: false },
   taxRate: { type: Number, default: 0.15, min: 0, max: 1 },
   runs24Hours: { type: Boolean, default: false },
+  legacySource: { system: String, id: String, importedAt: Date },
 }, { timestamps: true });
 
 outletSchema.index({ branch: 1, division: 1 });

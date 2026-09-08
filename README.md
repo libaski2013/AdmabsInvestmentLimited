@@ -36,6 +36,27 @@ npm run dev      # starts the app on http://localhost:5173
 The frontend reads the API URL from `VITE_API_URL` in `.env` (defaults to
 `http://localhost:4000/api`).
 
+### Import the verified legacy stock
+
+The repository includes the warehouse-specific export captured from the legacy ADMABS
+system. Validate it without changing the database:
+
+```bash
+npm --prefix server run migrate:legacy
+```
+
+Apply the migration to the configured `MONGODB_URI`:
+
+```bash
+npm --prefix server run migrate:legacy:apply
+```
+
+The apply command first writes a complete JSON backup, deletes only records referenced by
+active demo batches, then upserts the 10 legacy locations and their independent inventory.
+It is safe to rerun: legacy source IDs update existing imported records instead of adding
+duplicates. Branches, outlets, names, quantities, prices and product details remain editable
+from the Super Admin interface after import.
+
 ### Demo logins
 Seeded by `npm run seed` — username and password are the same for each role:
 

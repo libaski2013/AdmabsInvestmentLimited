@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  AreaChart,
-  Area,
+  ComposedChart,
+  Bar,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
+  Legend,
+  CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
 import { api, setToken } from "./api.js";
@@ -318,11 +321,21 @@ function Modal({ title, onClose, children }) {
 function Dashboard() {
   const [d, setD] = useState(null),
     [err, setErr] = useState("");
+  const [branches, setBranches] = useState([]);
+  const [outlets, setOutlets] = useState([]);
+  const [filters, setFilters] = useState({ start: "", end: "", branch: "", outlet: "" });
+  const load = () => {
+    const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
+    api.dashboard(params).then(setD).catch((e) => setErr(e.message));
+  };
   useEffect(() => {
-    api
-      .dashboard()
-      .then(setD)
-      .catch((e) => setErr(e.message));
+    load();
+    Promise.all([api.branches(), api.outlets()])
+      .then(([branchList, outletList]) => {
+        setBranches(branchList);
+        setOutlets(outletList);
+      })
+      .catch(() => {});
   }, []);
   return (
     <>
@@ -343,17 +356,40 @@ function Dashboard() {
         ))}
       </div>
       <div className="card">
-        <h3>Revenue trend</h3>
-        <ResponsiveContainer width="100%" height={190}>
-          <AreaChart data={d?.revenueTrend || []}>
-            <XAxis dataKey="m" tick={{ fill: "#6b87b0", fontSize: 9 }} />
-            <YAxis hide />
-            <Tooltip />
-            <Area dataKey="t" stroke="#60a5fa" fill="#2563eb33" />
-            <Area dataKey="f" stroke="#ef4444" fill="none" />
-            <Area dataKey="s" stroke="#10b981" fill="none" />
-          </AreaChart>
-        </ResponsiveContainer>
+        <div className="row between">
+          <div><h3>Overview Chart</h3><p className="muted">Sales, purchases and transaction taxes</p></div>
+          <button className="btn primary" onClick={load}>Apply</button>
+        </div>
+        <div className="grid" style={{ marginTop: 12 }}>
+          <input aria-label="Overview start date" type="date" value={filters.start} onChange={(e) => setFilters({ ...filters, start: e.target.value })} />
+          <input aria-label="Overview end date" type="date" value={filters.end} onChange={(e) => setFilters({ ...filters, end: e.target.value })} />
+          <select aria-label="Overview branch" value={filters.branch} onChange={(e) => setFilters({ ...filters, branch: e.target.value, outlet: "" })}>
+            <option value="">All branches</option>
+            {branches.map((branch) => <option key={branch._id} value={branch._id}>{branch.name}</option>)}
+          </select>
+          <select aria-label="Overview outlet" value={filters.outlet} onChange={(e) => setFilters({ ...filters, outlet: e.target.value })}>
+            <option value="">All outlets</option>
+            {outlets.filter((outlet) => !filters.branch || String(outlet.branch?._id || outlet.branch) === filters.branch).map((outlet) => <option key={outlet._id} value={outlet._id}>{outlet.name}</option>)}
+          </select>
+        </div>
+        <div style={{ overflowX: "auto", marginTop: 12 }}>
+          <div style={{ minWidth: 620, height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={d?.overviewChart || []} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#dbe4f0" />
+                <XAxis dataKey="m" tick={{ fill: "#6b87b0", fontSize: 9 }} />
+                <YAxis tick={{ fill: "#6b87b0", fontSize: 9 }} tickFormatter={(v) => v >= 1000 ? `${Math.round(v / 1000)}k` : v} />
+                <Tooltip formatter={(value) => money(value)} />
+                <Legend wrapperStyle={{ fontSize: 9 }} />
+                <Bar dataKey="sales" name="Sales" fill="#45b83f" maxBarSize={18} />
+                <Line type="monotone" dataKey="purchases" name="Purchases" stroke="#b9681d" strokeWidth={2.5} dot={{ r: 3, fill: "#fff" }} />
+                <Line type="monotone" dataKey="soldProductTax" name="Sold Product Tax" stroke="#2563eb" strokeWidth={1.7} dot={false} />
+                <Line type="monotone" dataKey="orderTax" name="Order Tax" stroke="#111827" strokeWidth={1.7} dot={false} />
+                <Line type="monotone" dataKey="purchasedProductTax" name="Purchased Product Tax" stroke="#d18a2c" strokeWidth={1.7} dot={{ r: 3, fill: "#d18a2c" }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
       <div className="card">
         <h3>Recent activity</h3>
@@ -768,11 +804,13 @@ function Fuel() {
     </>
   );
 }
-function Inventory() {
+function Inventory({ user }) {
   const [list, setList] = useState([]),
     [search, setSearch] = useState(""),
     [item, setItem] = useState(null),
     [qty, setQty] = useState(""),
+    [adjust, setAdjust] = useState(null),
+    [pricePreview, setPricePreview] = useState(null),
     [err, setErr] = useState("");
   const load = () =>
     api
@@ -784,7 +822,7 @@ function Inventory() {
   }, []);
   return (
     <>
-      <h2>Outlet Inventory</h2>
+      <div className="row between"><h2>Outlet Inventory</h2>{(["super_admin","ceo","gm"].includes(user?.role) || user?.permissions?.includes("inventory.price.adjust")) && <button className="btn red" onClick={() => { setAdjust({ categories:["Tyre","Rim","Battery"], mode:"percentage", value:"", rounding:"0.01", reason:"" }); setPricePreview(null); }}>Adjust Prices</button>}</div>
       <div className="row">
         <input
           className="field"
@@ -843,6 +881,7 @@ function Inventory() {
           </button>
         </Modal>
       )}
+      {adjust && <Modal title="Automotive Price Adjustment" onClose={() => setAdjust(null)}><p className="muted">Tyres, rims, batteries and lubricants only. Website prices use the same records.</p>{["Tyre","Rim","Battery","Lubricant"].map((c) => <label className="item" key={c}><input type="checkbox" checked={adjust.categories.includes(c)} onChange={(e) => setAdjust({ ...adjust, categories:e.target.checked ? [...adjust.categories,c] : adjust.categories.filter((x) => x !== c) })}/> {c}</label>)}<label>Method<select className="field" value={adjust.mode} onChange={(e) => setAdjust({ ...adjust, mode:e.target.value })}><option value="percentage">Percentage increase/decrease</option><option value="fixed">Fixed amount increase/decrease</option><option value="set">Set one price</option></select></label><label>Value<input className="field" type="number" step="0.01" value={adjust.value} onChange={(e) => setAdjust({ ...adjust, value:e.target.value })}/></label><label>Reason<input className="field" value={adjust.reason} onChange={(e) => setAdjust({ ...adjust, reason:e.target.value })}/></label>{pricePreview && <div className="card"><p><b>{pricePreview.affectedCount} products affected</b></p><p>{money(pricePreview.oldValue)} → {money(pricePreview.newValue)}</p></div>}<button className="btn" style={{ width:"100%" }} onClick={() => api.priceAdjustmentPreview({ ...adjust, value:Number(adjust.value), rounding:Number(adjust.rounding) }).then(setPricePreview).catch((e) => setErr(e.message))}>Preview Adjustment</button>{pricePreview && <button className="btn red" style={{ width:"100%" }} onClick={() => api.applyPriceAdjustment({ ...adjust, value:Number(adjust.value), rounding:Number(adjust.rounding) }).then(() => { setAdjust(null); load(); }).catch((e) => setErr(e.message))}>Confirm Audited Adjustment</button>}</Modal>}
     </>
   );
 }
@@ -850,6 +889,9 @@ function SimpleRecords({ type }) {
   const customers = type === "customers",
     [list, setList] = useState([]),
     [form, setForm] = useState(null),
+    [selected, setSelected] = useState(null),
+    [statement, setStatement] = useState(null),
+    [payment, setPayment] = useState(null),
     [err, setErr] = useState("");
   const load = () =>
     customers
@@ -885,7 +927,7 @@ function SimpleRecords({ type }) {
       {err && <p className="error">{err}</p>}
       <div className="card">
         {list.map((x) => (
-          <div className="item row between" key={x._id}>
+          <div className="item row between" key={x._id} onClick={() => customers && api.customerStatement(x._id).then((s) => { setSelected(x); setStatement(s); }).catch((e) => setErr(e.message))}>
             <div>
               <p>
                 <b>{customers ? x.name : x.description}</b>
@@ -896,7 +938,7 @@ function SimpleRecords({ type }) {
                   : `${x.category || "Expense"} · ${x.status}`}
               </p>
             </div>
-            {!customers && <b className="danger">{money(x.amount)}</b>}
+            {customers ? <b className={x.balance > 0 ? "danger" : ""}>{x.balance > 0 ? money(x.balance) : "Clear"}</b> : <b className="danger">{money(x.amount)}</b>}
           </div>
         ))}
       </div>
@@ -936,6 +978,7 @@ function SimpleRecords({ type }) {
           </button>
         </Modal>
       )}
+      {customers && selected && statement && <Modal title={`${selected.name} — Account`} onClose={() => { setSelected(null); setStatement(null); }}><div className="card"><p>Purchases: <b>{statement.summary.purchases}</b></p><p>Purchase total: <b>{money(statement.summary.purchaseTotal)}</b></p><p>Payments: <b>{money(statement.summary.paymentsReceived)}</b></p><p>Balance due: <b className="danger">{money(statement.summary.balance)}</b></p></div>{statement.purchases.map((x) => <div className="item" key={x._id}><div className="row between"><b>{x.invoiceNumber}</b><b>{money(x.total)}</b></div><p className="muted">{new Date(x.createdAt).toLocaleDateString()} · Due {money(x.amountDue)}</p></div>)}{statement.payments.map((x) => <div className="item" key={x._id}><div className="row between"><b>{x.receiptNumber}</b><b>{money(x.amount)}</b></div><p className="muted">{x.method} · {new Date(x.receivedAt).toLocaleDateString()}</p></div>)}{statement.summary.balance > 0 && !payment && <button className="btn green" style={{ width: "100%" }} onClick={() => setPayment({ amount: statement.summary.balance, method: "Cash", reference: "" })}>Receive Payment</button>}{payment && <div className="card"><label>Amount<input className="field" type="number" min="0.01" max={statement.summary.balance} step="0.01" value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })}/></label><label>Method<select className="field" value={payment.method} onChange={(e) => setPayment({ ...payment, method: e.target.value })}>{["Cash","Card","Mobile Money","Bank Transfer","Cheque"].map((x) => <option key={x}>{x}</option>)}</select></label><label>Reference<input className="field" value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })}/></label><button className="btn green" style={{ width: "100%" }} onClick={() => api.receiveCustomerPayment(selected._id, { ...payment, amount: Number(payment.amount) }).then(() => api.customerStatement(selected._id)).then((s) => { setStatement(s); setPayment(null); load(); }).catch((e) => setErr(e.message))}>Post Payment</button></div>}</Modal>}
     </>
   );
 }
@@ -2479,7 +2522,7 @@ export default function App() {
     pos: <POS user={user} />,
     market: <POS user={user} market />,
     fuel: <Fuel />,
-    inventory: <Inventory />,
+    inventory: <Inventory user={user} />,
     procurement: <Procurement />,
     customers: <SimpleRecords type="customers" />,
     expenses: <SimpleRecords type="expenses" />,

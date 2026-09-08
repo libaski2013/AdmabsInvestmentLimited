@@ -46,7 +46,7 @@ export const api = {
   heartbeat: () => request('/sessions/heartbeat', { method: 'POST' }),
   serverTime: () => request('/time'),
 
-  dashboard: () => request('/dashboard'),
+  dashboard: (params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/dashboard${qs ? `?${qs}` : ''}`); },
   storeProducts: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/store/products${qs ? `?${qs}` : ''}`);
@@ -74,6 +74,9 @@ export const api = {
   scanProduct: code => request(`/products/scan/${encodeURIComponent(code)}`),
   receiveProductStock: (id, body) => request(`/products/${id}/stock`, { method: 'POST', body }),
   stockMovements: () => request('/stock-movements'),
+  priceAdjustmentPreview: body => request('/products/price-adjust/preview', { method: 'POST', body }),
+  applyPriceAdjustment: body => request('/products/price-adjust', { method: 'POST', body }),
+  priceAdjustments: () => request('/price-adjustments'),
 
   customers: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
@@ -82,6 +85,8 @@ export const api = {
   createCustomer: body => request('/customers', { method: 'POST', body }),
   updateCustomer: (id, body) => request(`/customers/${id}`, { method: 'PATCH', body }),
   deleteCustomer: id => request(`/customers/${id}`, { method: 'DELETE' }),
+  customerStatement: (id, params = {}) => { const qs = new URLSearchParams(params).toString(); return request(`/customers/${id}/statement${qs ? `?${qs}` : ''}`); },
+  receiveCustomerPayment: (id, body) => request(`/customers/${id}/payments`, { method: 'POST', body }),
 
   suppliers: () => request('/suppliers'),
 

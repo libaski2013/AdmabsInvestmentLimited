@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const productSchema = new mongoose.Schema(
   {
-    code: { type: String, required: true, unique: true },
+    code: { type: String, required: true, trim: true },
     name: { type: String, required: true },
     category: { type: String, required: true }, // Tyre | Rim | Battery | Lubricant | Grocery | Service
     qty: { type: Number, default: 0 },
@@ -24,9 +24,20 @@ const productSchema = new mongoose.Schema(
     imageUrl: String,
     websiteVisible: { type: Boolean, default: true },
     description: String,
+    legacySource: {
+      system: String,
+      productId: String,
+      warehouseId: String,
+      warehouseName: String,
+      importedAt: Date,
+    },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
+
+// The same SKU may be held independently by several outlets.
+productSchema.index({ outlet: 1, code: 1 }, { unique: true });
+productSchema.index({ 'legacySource.system': 1, 'legacySource.warehouseId': 1, 'legacySource.productId': 1 }, { sparse: true });
 
 export default mongoose.model('Product', productSchema);

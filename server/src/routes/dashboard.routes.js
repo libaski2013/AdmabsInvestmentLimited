@@ -3,6 +3,7 @@ import Product from '../models/Product.js';
 import Customer from '../models/Customer.js';
 import Expense from '../models/Expense.js';
 import Approval from '../models/Approval.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
 
 const DIVISION_MAP = {
   Tyre: 'Tyres & Batteries',
@@ -27,12 +28,16 @@ function monthBounds(offsetMonths = 0) {
 }
 
 export default async function dashboardRoutes(fastify) {
-  fastify.get('/api/dashboard', { preHandler: [fastify.authenticate] }, async (request) => {
+  fastify.get('/api/dashboard', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const { start: monthStart, end: monthEnd } = monthBounds(0);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
     const scope = fastify.scopeFilter(request);
+    if (!['super_admin', 'ceo', 'gm'].includes(request.user.role) && request.query?.branch && !request.user.branchIds?.includes(String(request.query.branch))) return reply.code(403).send({ error: 'Branch is outside your assignment' });
+    if (!['super_admin', 'ceo', 'gm'].includes(request.user.role) && request.query?.outlet && !request.user.outletIds?.includes(String(request.query.outlet))) return reply.code(403).send({ error: 'Outlet is outside your assignment' });
+    if (request.query?.branch) scope.branch = request.query.branch;
+    if (request.query?.outlet) scope.outlet = request.query.outlet;
     const [salesThisMonth, allSales, expensesThisMonth, customers, scopedProducts, pendingApprovals] =
       await Promise.all([
         Sale.find({ ...scope, createdAt: { $gte: monthStart, $lt: monthEnd }, status: 'posted' }),
@@ -77,26 +82,21 @@ export default async function dashboardRoutes(fastify) {
       v: Math.round(v),
     }));
 
-    const trend = [];
-    for (let i = 4; i >= 0; i--) {
-      const { start, end } = monthBounds(i);
-      const monthSales = allSales.filter((s) => s.createdAt >= start && s.createdAt < end);
-      const byDiv = { t: 0, f: 0, s: 0, o: 0 };
-      for (const sale of monthSales) {
-        for (const item of sale.items) {
-          const div = DIVISION_MAP[item.category] || 'Online';
-          const key = div === 'Fuel' ? 'f' : div === 'Supermarket' ? 's' : div === 'Online' ? 'o' : 't';
-          byDiv[key] += item.price * item.qty;
-        }
-      }
-      trend.push({
-        m: start.toLocaleString('en-US', { month: 'short' }),
-        t: Math.round(byDiv.t / 1000),
-        f: Math.round(byDiv.f / 1000),
-        s: Math.round(byDiv.s / 1000),
-        o: Math.round(byDiv.o / 1000),
-      });
-    }
+    const chartEnd = request.query?.end ? new Date(`${request.query.end}T23:59:59.999Z`) : new Date();
+    const chartStart = request.query?.start ? new Date(`${request.query.start}T00:00:00.000Z`) : new Date(chartEnd.getFullYear(), chartEnd.getMonth() - 12, 1);
+    const chartSales = await Sale.find({ ...scope, status: 'posted', createdAt: { $gte: chartStart, $lte: chartEnd } }).lean();
+    const purchaseScope = fastify.scopeFilter(request);
+    if (request.query?.branch) purchaseScope.branch = request.query.branch;
+    if (request.query?.outlet) purchaseScope.outlet = request.query.outlet;
+    const chartPurchases = await PurchaseOrder.find({ ...purchaseScope, status: { $in: ['approved', 'delivered'] }, createdAt: { $gte: chartStart, $lte: chartEnd } }).lean();
+    const overviewMap = new Map();
+    const cursor = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1);
+    const lastMonth = new Date(chartEnd.getFullYear(), chartEnd.getMonth(), 1);
+    let guard = 0;
+    while (cursor <= lastMonth && guard++ < 24) { const key = cursor.toISOString().slice(0,7); overviewMap.set(key, { month:key, m:cursor.toLocaleString('en-US',{month:'short',year:'numeric'}), sales:0, purchases:0, soldProductTax:0, orderTax:0, purchasedProductTax:0 }); cursor.setMonth(cursor.getMonth()+1); }
+    for (const sale of chartSales) { const row=overviewMap.get(new Date(sale.createdAt).toISOString().slice(0,7)); if (!row) continue; row.sales += Number(sale.subtotal||0); row.orderTax += Number(sale.tax||0); }
+    for (const purchase of chartPurchases) { const row=overviewMap.get(new Date(purchase.createdAt).toISOString().slice(0,7)); if (!row) continue; row.purchases += Number(purchase.amount||0); row.purchasedProductTax += Number(purchase.tax||0); }
+    const overviewChart=[...overviewMap.values()].map(row=>Object.fromEntries(Object.entries(row).map(([k,v])=>[k,typeof v==='number'?Math.round(v*100)/100:v])));
 
     const alerts = lowStock.slice(0, 4).map((p) => ({
       i: '⚠️',
@@ -131,7 +131,8 @@ export default async function dashboardRoutes(fastify) {
       paymentMix: Object.entries(paymentTotals).map(([name, value]) => ({ name, value: Math.round(value) })),
       branchPerformance: Object.entries(branchTotals).map(([branch, value]) => ({ branch, value: Math.round(value) })).sort((a, b) => b.value - a.value),
       revenueByDivision,
-      revenueTrend: trend,
+      overviewChart,
+      overviewFilters: { start: chartStart, end: chartEnd, branch: request.query?.branch, outlet: request.query?.outlet },
       alerts,
       recentTransactions,
       lowStockCount: lowStock.length,

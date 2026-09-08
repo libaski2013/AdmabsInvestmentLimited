@@ -2,6 +2,7 @@ import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import JournalEntry from '../models/JournalEntry.js';
 import Outlet from '../models/Outlet.js';
+import Customer from '../models/Customer.js';
 
 async function nextInvoiceNumber() {
   return `INV-${Date.now()}-${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
@@ -43,8 +44,13 @@ export default async function posRoutes(fastify) {
     const normalizedPayments = payments?.length ? payments : [{ method: paymentMethod || 'Cash', amount: total }];
     const paid = normalizedPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
     if (Math.abs(paid - total) > 0.01) return reply.code(400).send({ error: 'Payment total must equal the sale total' });
+    if (normalizedPayments.some(p => p.method === 'Customer Credit') && !customer) return reply.code(400).send({ error: 'Select a customer before using Customer Credit' });
     const resolvedBranch = branch || products[0]?.branch;
     const resolvedOutlet = outlet || products[0]?.outlet;
+    if (customer) {
+      const allowedCustomer = await Customer.findOne({ _id: customer, active: { $ne: false }, ...fastify.scopeFilter(request) }).select('_id').lean();
+      if (!allowedCustomer) return reply.code(404).send({ error: 'Customer not found in your assigned location' });
+    }
     const shift = ['day', 'night'].includes(workShift) ? workShift : (new Date().getHours() >= 18 || new Date().getHours() < 6 ? 'night' : 'day');
     const outletRecord = resolvedOutlet ? await Outlet.findById(resolvedOutlet).select('runs24Hours').lean() : null;
     if (shift === 'night' && !outletRecord?.runs24Hours) return reply.code(409).send({ error: 'Night-shift sales are disabled for this outlet. Enable 24-hour operation in Company & Branches.' });
@@ -81,18 +87,27 @@ export default async function posRoutes(fastify) {
       return reply.code(409).send({ error: 'Stock changed during checkout. The sale was voided; please refresh and try again.' });
     }
 
-    const cashAccount = normalizedPayments.some(p => p.method === 'Customer Credit') ? ['1100', 'Accounts Receivable'] : ['1000', 'Cash and Payment Clearing'];
+    const creditAmount = normalizedPayments.filter(p => p.method === 'Customer Credit').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const settledAmount = total - creditAmount;
     const cogs = itemsWithCost.reduce((sum, i) => sum + i.cost * i.qty, 0);
     await JournalEntry.create({
       number: `JE-${sale.invoiceNumber}`, date: sale.postedAt, description: `Sale ${sale.invoiceNumber}`,
       source: 'sale', sourceId: sale._id, branch: resolvedBranch, outlet: resolvedOutlet, createdBy: request.user.id,
       lines: [
-        { accountCode: cashAccount[0], accountName: cashAccount[1], debit: total },
+        ...(settledAmount > 0 ? [{ accountCode: '1000', accountName: 'Cash and Payment Clearing', debit: settledAmount }] : []),
+        ...(creditAmount > 0 ? [{ accountCode: '1100', accountName: 'Accounts Receivable', debit: creditAmount }] : []),
         { accountCode: '4000', accountName: 'Sales Revenue', credit: subtotal },
         ...(tax > 0 ? [{ accountCode: '2100', accountName: 'VAT Payable', credit: tax }] : []),
         ...(cogs > 0 ? [{ accountCode: '5000', accountName: 'Cost of Goods Sold', debit: cogs }, { accountCode: '1200', accountName: 'Inventory', credit: cogs }] : []),
       ],
     });
+
+    if (customer) {
+      await Customer.findByIdAndUpdate(customer, {
+        $inc: { balance: creditAmount, visits: 1, loyaltyPoints: Math.floor(total) },
+        $set: { lastVisit: sale.postedAt },
+      });
+    }
 
     return reply.code(201).send(sale);
   });

@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import ExcelJS from 'exceljs';
 import DataAudit from '../models/DataAudit.js';
 
-const COLLECTIONS=['users','branches','outlets','products','sales','customers','suppliers','purchaseorders','expenses','approvals','journalentries','fueltanks','fuelpumps','fuelshifts','fueldips','fueldeliveries','sitecontents','cashreconciliations','stockmovements','demobatches','payrollruns','smscampaigns','employeerewards'];
+const COLLECTIONS=['users','branches','outlets','products','sales','customers','customerpayments','priceadjustments','suppliers','purchaseorders','expenses','approvals','journalentries','fueltanks','fuelpumps','fuelshifts','fueldips','fueldeliveries','sitecontents','cashreconciliations','stockmovements','demobatches','payrollruns','smscampaigns','employeerewards'];
 const backupGuard=fastify=>[fastify.authenticate,fastify.requirePermission('data.manage','ceo')];
 let rateCache={key:'',value:null,expires:0};
 

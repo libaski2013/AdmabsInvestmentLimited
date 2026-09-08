@@ -8,9 +8,11 @@ const branchSchema = new mongoose.Schema(
     staffCount: { type: Number, default: 0 },
     code: { type: String, uppercase: true, trim: true },
     address: { type: String },
+    city: { type: String },
     region: { type: String },
     phone: { type: String },
     divisions: [{ type: String, enum: ['tyres', 'fuel', 'supermarket', 'warehouse', 'head_office'] }],
+    legacySource: { system: String, id: String, importedAt: Date },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }
