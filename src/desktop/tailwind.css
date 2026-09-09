@@ -4,8 +4,9 @@
 
 @media print {
   body:has(.statement-document) * { visibility: hidden !important; }
-  body:has(.statement-document) .statement-document, body:has(.statement-document) .statement-document * { visibility: visible !important; }
+  body:has(.statement-document) .statement-document, body:has(.statement-document) .statement-document *, body:has(.statement-document) .statement-qr-document, body:has(.statement-document) .statement-qr-document * { visibility: visible !important; }
   body:has(.statement-document) .statement-document { display: block !important; position: absolute; inset: 0; width: 100%; }
+  body:has(.statement-document) .statement-qr-document { display: block !important; position: fixed; left: 20mm; bottom: 15mm; z-index: 2; }
   body.printing-receipt * { visibility: hidden !important; }
   body.printing-receipt .receipt-print, body.printing-receipt .receipt-print * { visibility: visible !important; }
   body.printing-receipt .receipt-print {
