@@ -2491,7 +2491,8 @@ function Attendance({ user }) {
 }
 export default function App() {
   const [user, setUser] = useState(null),
-    [screen, setScreen] = useState("dash"),
+    [restoringSession, setRestoringSession] = useState(() => Boolean(localStorage.getItem("admabs_mobile_token"))),
+    [screen, setScreen] = useState(() => localStorage.getItem("admabs_mobile_screen") || "dash"),
     [drawer, setDrawer] = useState(false),
     [offset, setOffset] = useState(0),
     [, tick] = useState(0),
@@ -2499,6 +2500,17 @@ export default function App() {
     [profileDraft, setProfileDraft] = useState(""),
     [profileError, setProfileError] = useState(""),
     [profileSaving, setProfileSaving] = useState(false);
+  useEffect(() => {
+    if (!localStorage.getItem("admabs_mobile_token")) { setRestoringSession(false); return; }
+    api.me().then(({ user: account }) => {
+      const restored = { ...account, id: account._id || account.id };
+      setUser(restored);
+      const allowed = [...(CONFIG[restored.role]?.mods || []), ...(restored.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
+      const saved = localStorage.getItem("admabs_mobile_screen");
+      setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
+    }).catch(() => setToken(null)).finally(() => setRestoringSession(false));
+  }, []);
+  useEffect(() => { if (user) localStorage.setItem("admabs_mobile_screen", screen); }, [screen, user]);
   const openProfile = () => {
     setProfileDraft(user?.avatarUrl || "");
     setProfileError("");
@@ -2549,12 +2561,15 @@ export default function App() {
       clearInterval(b);
     };
   }, [user]);
+  if (restoringSession) return <div className="login"><div className="center"><img className="hero-logo" src="/admabs-app-icon.png" alt="ADMABS"/><h3>Restoring your secure session…</h3></div></div>;
   if (!user)
     return (
       <Login
         onLogin={(u) => {
           setUser(u);
-          setScreen(CONFIG[u.role]?.mods[0] || "dash");
+          const allowed = [...(CONFIG[u.role]?.mods || []), ...(u.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
+          const saved = localStorage.getItem("admabs_mobile_screen");
+          setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
         }}
       />
     );

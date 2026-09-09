@@ -33,7 +33,7 @@ export default async function authRoutes(fastify) {
   });
 
   fastify.get('/api/auth/me', { preHandler: [fastify.authenticate] }, async (request) => {
-    const user = await User.findById(request.user.id).select('-passwordHash');
+    const user = await User.findById(request.user.id).select('-passwordHash').populate([{ path: 'branches', select: 'name code divisions' }, { path: 'outlets', select: 'name code division branch runs24Hours' }, { path: 'branch', select: 'name code divisions' }]);
     return { user };
   });
 }

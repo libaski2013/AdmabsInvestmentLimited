@@ -1041,8 +1041,9 @@ const SECTIONS = { dash: DashView, pos: PosView, mkt: MktView, fuel: FuelView, i
 // ─── SHELL ───
 export default function DesktopApp() {
   const [user, setUser] = useState(null);
+  const [restoringSession,setRestoringSession]=useState(()=>Boolean(localStorage.getItem('admabs_token')));
   const role = user?.role || null;
-  const [active, setActive] = useState('dash');
+  const [active, setActive] = useState(()=>localStorage.getItem('admabs_active_module')||'dash');
   const [sideOpen, setSideOpen] = useState(true);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [serverOffset,setServerOffset]=useState(0);
@@ -1063,10 +1064,13 @@ export default function DesktopApp() {
   const openProfile=()=>{setProfileDraft(user?.avatarUrl||'');setProfileError('');setProfileOpen(true)};
 
   const refreshApprovals = () => api.approvals().then(list => setPendingApprovals(list.filter(a => a.status === 'pending').length)).catch(() => {});
+  useEffect(()=>{if(!localStorage.getItem('admabs_token')){setRestoringSession(false);return}api.me().then(({user:account})=>{const restored={...account,id:account._id||account.id};setUser(restored);const saved=localStorage.getItem('admabs_active_module');const allowed=modulesForUser(restored);setActive(saved&&allowed.includes(saved)?saved:(allowed[0]||'dash'))}).catch(()=>setToken(null)).finally(()=>setRestoringSession(false))},[]);
+  useEffect(()=>{if(role)localStorage.setItem('admabs_active_module',active)},[active,role]);
   useEffect(() => { if (role) refreshApprovals(); }, [role]);
   useEffect(()=>{if(!role)return;const sync=()=>api.heartbeat().then(x=>setServerOffset(new Date(x.serverTime).getTime()-Date.now())).catch(()=>{});sync();const heartbeat=setInterval(sync,45000);const clock=setInterval(()=>setClockTick(x=>x+1),1000);return()=>{clearInterval(heartbeat);clearInterval(clock)}},[role]);
 
-  if (!role) return <LoginScreen onLogin={account => { setUser(account); const allowed = modulesForUser(account); setActive(allowed[0] || 'dash'); }} />;
+  if(restoringSession)return <div className="min-h-screen bg-blue-950 grid place-items-center"><div className="text-center"><img src="/admabs-app-icon.png" alt="ADMABS" className="w-16 h-16 rounded-2xl bg-white p-1 mx-auto animate-pulse"/><p className="text-white text-sm font-bold mt-4">Restoring your secure session…</p></div></div>;
+  if (!role) return <LoginScreen onLogin={account => { setUser(account); const allowed = modulesForUser(account); const saved=localStorage.getItem('admabs_active_module');setActive(saved&&allowed.includes(saved)?saved:(allowed[0] || 'dash')); }} />;
 
   const rc = ROLE_CONFIG[role];
   const assignmentLabel = user?.outlets?.map(o => o.name).join(', ') || user?.branches?.map(b => b.name).join(', ') || user?.branch?.name || rc.branch;
