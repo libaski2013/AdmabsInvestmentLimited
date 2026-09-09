@@ -795,7 +795,7 @@ function StaffView({ user }) {
             return (
               <div key={u._id} className={view==='thumbnail'?'bg-white rounded-xl border border-gray-100 shadow-sm p-4':'px-4 py-3 flex flex-wrap items-center gap-4'}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 ${rc?.color || 'bg-gray-500'} rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0`}>{initialsOf(u.name)}</div>
+                  <div className={`w-10 h-10 ${rc?.color || 'bg-gray-500'} rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0 overflow-hidden`}>{u.avatarUrl?<img src={u.avatarUrl} alt={`${u.name} profile`} className="w-full h-full object-cover"/>:initialsOf(u.name)}</div>
                   <div className="min-w-48"><p className="text-sm font-bold text-gray-800">{u.name}</p><p className="text-xs text-gray-500 mt-0.5">{rc?.label || u.role}</p><p className="text-xs text-gray-400 mt-0.5">{u.branch?.name || '—'}</p></div>
                 </div>
                 <div className={view==='thumbnail'?'mt-3 pt-3 border-t border-gray-50 flex justify-between items-center text-xs':'flex-1 min-w-52 flex justify-between items-center text-xs gap-4'}><span className="text-gray-400">{u.username}</span><Bd label={u.active ? 'Active' : 'Inactive'} v={u.active ? 'green' : 'red'} /></div>
@@ -1003,6 +1003,20 @@ export default function DesktopApp() {
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [serverOffset,setServerOffset]=useState(0);
   const [,setClockTick]=useState(0);
+  const [profileOpen,setProfileOpen]=useState(false);
+  const [profileDraft,setProfileDraft]=useState('');
+  const [profileError,setProfileError]=useState('');
+  const [profileSaving,setProfileSaving]=useState(false);
+
+  const chooseProfilePicture=e=>{
+    const file=e.target.files?.[0]; if(!file)return;
+    setProfileError('');
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)){setProfileError('Choose a JPEG, PNG or WebP image.');return}
+    if(file.size>1.5*1024*1024){setProfileError('Profile picture must be smaller than 1.5 MB.');return}
+    const reader=new FileReader(); reader.onload=()=>setProfileDraft(String(reader.result||'')); reader.onerror=()=>setProfileError('The selected picture could not be read.'); reader.readAsDataURL(file);
+  };
+  const saveProfilePicture=async()=>{setProfileSaving(true);setProfileError('');try{const result=await api.updateMyProfile({avatarUrl:profileDraft||null});setUser(current=>({...current,...result.user,id:result.user?._id||current.id}));setProfileOpen(false)}catch(error){setProfileError(error.message||'Profile picture could not be saved.')}finally{setProfileSaving(false)}};
+  const openProfile=()=>{setProfileDraft(user?.avatarUrl||'');setProfileError('');setProfileOpen(true)};
 
   const refreshApprovals = () => api.approvals().then(list => setPendingApprovals(list.filter(a => a.status === 'pending').length)).catch(() => {});
   useEffect(() => { if (role) refreshApprovals(); }, [role]);
@@ -1032,7 +1046,7 @@ export default function DesktopApp() {
         </div>
         {sideOpen && (
           <div className="mx-2 mt-2 mb-1 p-2.5 rounded-xl border border-blue-800 flex items-center gap-2.5">
-            <div className={`w-8 h-8 ${rc.color} rounded-lg flex items-center justify-center text-white text-xs font-black flex-shrink-0`}>{rc.initials}</div>
+            <button onClick={openProfile} title="Update profile picture" className={`w-8 h-8 ${rc.color} rounded-lg flex items-center justify-center text-white text-xs font-black flex-shrink-0 overflow-hidden`}>{user.avatarUrl?<img src={user.avatarUrl} alt="Your profile" className="w-full h-full object-cover"/>:initialsOf(user.name)}</button>
             <div className="min-w-0"><p className="text-white text-xs font-bold leading-tight truncate">{rc.label}</p><p className="text-blue-400 text-xs truncate">{assignmentLabel}</p></div>
           </div>
         )}
@@ -1076,14 +1090,15 @@ export default function DesktopApp() {
                 {pendingApprovals > 0 && <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-black">{pendingApprovals}</span>}
               </button>
             )}
-            <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 ${rc.color} rounded-full flex items-center justify-center text-white text-xs font-black`}>{rc.initials}</div>
+            <button onClick={openProfile} title="Update profile picture" className="flex items-center gap-2.5 rounded-xl p-1 hover:bg-gray-50 text-left">
+              <div className={`w-8 h-8 ${rc.color} rounded-full flex items-center justify-center text-white text-xs font-black overflow-hidden`}>{user.avatarUrl?<img src={user.avatarUrl} alt="Your profile" className="w-full h-full object-cover"/>:initialsOf(user.name)}</div>
               <div className="hidden md:block text-left"><p className="text-xs font-black text-gray-800 leading-none">{user?.name || rc.label}</p><p className="text-xs text-blue-600 font-semibold mt-0.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> {rc.label}</p></div>
-            </div>
+            </button>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-5">{renderView()}</main>
       </div>
+      {profileOpen&&<Modal title="Update profile picture" onClose={()=>setProfileOpen(false)}><div className="space-y-5 text-center"><div className={`w-28 h-28 mx-auto ${rc.color} rounded-full overflow-hidden flex items-center justify-center text-white text-2xl font-black ring-4 ring-blue-50`}>{profileDraft?<img src={profileDraft} alt="Profile preview" className="w-full h-full object-cover"/>:initialsOf(user.name)}</div><div><label className="inline-flex cursor-pointer px-4 py-2.5 bg-blue-900 text-white rounded-xl text-xs font-black">Choose picture<input type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseProfilePicture} className="hidden"/></label><p className="text-xs text-gray-400 mt-2">JPEG, PNG or WebP · maximum 1.5 MB</p></div>{profileError&&<p className="text-xs text-red-600 bg-red-50 rounded-xl p-3">{profileError}</p>}<div className="flex gap-2"><button onClick={()=>setProfileDraft('')} className="flex-1 border border-gray-200 py-2.5 rounded-xl text-xs font-bold text-gray-600">Remove</button><button onClick={saveProfilePicture} disabled={profileSaving} className="flex-1 bg-red-600 text-white py-2.5 rounded-xl text-xs font-black disabled:opacity-60">{profileSaving?'Saving…':'Save picture'}</button></div></div></Modal>}
     </div>
   );
 }

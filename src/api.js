@@ -1,15 +1,28 @@
 const BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:4000/api');
+const responseCache = new Map();
+const inflight = new Map();
+const CACHE_MS = 30000;
 
 function getToken() {
   return localStorage.getItem('admabs_token');
 }
 
 export function setToken(token) {
+  responseCache.clear(); inflight.clear();
   if (token) localStorage.setItem('admabs_token', token);
   else localStorage.removeItem('admabs_token');
 }
 
 async function request(path, { method = 'GET', body } = {}) {
+  const cacheKey = `${getToken() || 'guest'}:${path}`;
+  if (method === 'GET') {
+    const cached = responseCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < CACHE_MS) return cached.data;
+    if (inflight.has(cacheKey)) return inflight.get(cacheKey);
+  } else {
+    responseCache.clear();
+  }
+  const perform = async () => {
   const headers = body ? { 'Content-Type': 'application/json' } : {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -29,7 +42,13 @@ async function request(path, { method = 'GET', body } = {}) {
     throw new Error(message);
   }
   if (res.status === 204) return null;
-  return res.json();
+  const data = await res.json();
+  if (method === 'GET') responseCache.set(cacheKey, { at: Date.now(), data });
+  return data;
+  };
+  const promise = perform();
+  if (method === 'GET') inflight.set(cacheKey, promise);
+  try { return await promise; } finally { if (method === 'GET') inflight.delete(cacheKey); }
 }
 
 async function requestBlob(path) {
@@ -63,6 +82,7 @@ export const api = {
   permissions: () => request('/permissions'),
   createUser: body => request('/users', { method: 'POST', body }),
   updateUser: (id, body) => request(`/users/${id}`, { method: 'PATCH', body }),
+  updateMyProfile: body => request('/users/me/profile', { method: 'PATCH', body }),
 
   products: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

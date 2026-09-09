@@ -12,6 +12,20 @@ export const PERMISSIONS = [
 ];
 
 export default async function userRoutes(fastify) {
+  fastify.patch('/api/users/me/profile', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const avatarUrl = request.body?.avatarUrl;
+    if (avatarUrl !== null && typeof avatarUrl !== 'string') return reply.code(400).send({ error: 'Select a valid profile picture' });
+    if (avatarUrl) {
+      if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarUrl)) return reply.code(400).send({ error: 'Profile picture must be a JPEG, PNG or WebP image' });
+      const bytes = Math.floor((avatarUrl.length - avatarUrl.indexOf(',') - 1) * 0.75);
+      if (bytes > 1.5 * 1024 * 1024) return reply.code(413).send({ error: 'Profile picture must be smaller than 1.5 MB' });
+    }
+    const update = avatarUrl ? { $set: { avatarUrl } } : { $unset: { avatarUrl: 1 } };
+    const user = await User.findByIdAndUpdate(request.user.id, update, { new: true }).select('-passwordHash').populate('branch branches outlets');
+    if (!user) return reply.code(404).send({ error: 'User account not found' });
+    return { user };
+  });
+
   fastify.get('/api/users/super-admin-status', { preHandler: [fastify.authenticate] }, async () => ({ exists: Boolean(await User.exists({ role: 'super_admin', active: true })) }));
   fastify.get(
     '/api/users',

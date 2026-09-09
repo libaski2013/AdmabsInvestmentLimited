@@ -13,6 +13,7 @@ import {
 import { api, setToken } from "./api.js";
 const money = (n) =>
   `GH₵ ${Number(n || 0).toLocaleString("en-GH", { maximumFractionDigits: 2 })}`;
+const initials = (name) => (name || "U").split(" ").filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 const CONFIG = {
   super_admin: {
     label: "Super Administrator",
@@ -2475,7 +2476,46 @@ export default function App() {
     [screen, setScreen] = useState("dash"),
     [drawer, setDrawer] = useState(false),
     [offset, setOffset] = useState(0),
-    [, tick] = useState(0);
+    [, tick] = useState(0),
+    [profileOpen, setProfileOpen] = useState(false),
+    [profileDraft, setProfileDraft] = useState(""),
+    [profileError, setProfileError] = useState(""),
+    [profileSaving, setProfileSaving] = useState(false);
+  const openProfile = () => {
+    setProfileDraft(user?.avatarUrl || "");
+    setProfileError("");
+    setProfileOpen(true);
+  };
+  const chooseProfilePicture = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setProfileError("");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setProfileError("Choose a JPEG, PNG or WebP image.");
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+      setProfileError("Profile picture must be smaller than 1.5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setProfileDraft(String(reader.result || ""));
+    reader.onerror = () => setProfileError("The selected picture could not be read.");
+    reader.readAsDataURL(file);
+  };
+  const saveProfilePicture = async () => {
+    setProfileSaving(true);
+    setProfileError("");
+    try {
+      const result = await api.updateMyProfile({ avatarUrl: profileDraft || null });
+      setUser((current) => ({ ...current, ...result.user, id: result.user?._id || current.id }));
+      setProfileOpen(false);
+    } catch (error) {
+      setProfileError(error.message || "Profile picture could not be saved.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
   useEffect(() => {
     if (!user) return;
     const sync = () =>
@@ -2571,6 +2611,9 @@ export default function App() {
             })}
           </p>
         </div>
+        <button className="avatar-button" onClick={openProfile} aria-label="Update profile picture">
+          {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile" /> : initials(user.name)}
+        </button>
       </header>
       <main className="page">{content}</main>
       <footer className="bottom">
@@ -2592,7 +2635,9 @@ export default function App() {
         <div className="drawer" onClick={() => setDrawer(false)}>
           <nav onClick={(e) => e.stopPropagation()}>
             <div className="row">
-              <img className="logo" src="/admabs-app-icon.png" alt="ADMABS" />
+              <button className="avatar-button large" onClick={openProfile} aria-label="Update profile picture">
+                {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile" /> : initials(user.name)}
+              </button>
               <div>
                 <b>{user.name}</b>
                 <p className="muted">{CONFIG[user.role]?.label}</p>
@@ -2620,6 +2665,25 @@ export default function App() {
             </button>
           </nav>
         </div>
+      )}
+      {profileOpen && (
+        <Modal title="Update profile picture" onClose={() => setProfileOpen(false)}>
+          <div className="profile-editor">
+            <div className="profile-preview">
+              {profileDraft ? <img src={profileDraft} alt="Profile preview" /> : initials(user.name)}
+            </div>
+            <label className="btn primary profile-picker">
+              Choose picture
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseProfilePicture} />
+            </label>
+            <p className="muted center">JPEG, PNG or WebP · maximum 1.5 MB</p>
+            {profileError && <p className="error center">⚠ {profileError}</p>}
+            <div className="row" style={{ marginTop: 18 }}>
+              <button className="btn outline grow" onClick={() => setProfileDraft("")}>Remove</button>
+              <button className="btn red grow" onClick={saveProfilePicture} disabled={profileSaving}>{profileSaving ? "Saving…" : "Save picture"}</button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

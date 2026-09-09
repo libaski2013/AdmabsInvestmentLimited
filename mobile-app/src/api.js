@@ -2,12 +2,26 @@ const BASE =
   import.meta.env.VITE_API_URL ||
   "https://admabsinvestmentlimited-production.up.railway.app/api";
 let token = localStorage.getItem("admabs_mobile_token");
+const responseCache = new Map();
+const inflight = new Map();
+const CACHE_MS = 30000;
 export const setToken = (value) => {
+  responseCache.clear();
+  inflight.clear();
   token = value;
   if (value) localStorage.setItem("admabs_mobile_token", value);
   else localStorage.removeItem("admabs_mobile_token");
 };
 async function call(path, { method = "GET", body } = {}) {
+  const cacheKey = `${token || "guest"}:${path}`;
+  if (method === "GET") {
+    const cached = responseCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < CACHE_MS) return cached.data;
+    if (inflight.has(cacheKey)) return inflight.get(cacheKey);
+  } else {
+    responseCache.clear();
+  }
+  const perform = async () => {
   const r = await fetch(`${BASE}${path}`, {
     method,
     headers: {
@@ -23,7 +37,13 @@ async function call(path, { method = "GET", body } = {}) {
     } catch {}
     throw new Error(message);
   }
-  return r.status === 204 ? null : r.json();
+  const data = r.status === 204 ? null : await r.json();
+  if (method === "GET") responseCache.set(cacheKey, { at: Date.now(), data });
+  return data;
+  };
+  const promise = perform();
+  if (method === "GET") inflight.set(cacheKey, promise);
+  try { return await promise; } finally { if (method === "GET") inflight.delete(cacheKey); }
 }
 const query = (path, p = {}) =>
   call(
@@ -81,6 +101,7 @@ export const api = {
   permissions: () => call("/permissions"),
   createUser: (body) => call("/users", { method: "POST", body }),
   updateUser: (id, body) => call(`/users/${id}`, { method: "PATCH", body }),
+  updateMyProfile: (body) => call("/users/me/profile", { method: "PATCH", body }),
   suppliers: () => call("/suppliers"),
   purchaseOrders: () => call("/purchase-orders"),
   createPurchaseOrder: (body) =>

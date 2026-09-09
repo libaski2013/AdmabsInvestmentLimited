@@ -29,7 +29,7 @@ export default async function authRoutes(fastify) {
     user.lastLoginAt = now;
     await user.save();
     await user.populate([{ path: 'branches', select: 'name code divisions' }, { path: 'outlets', select: 'name code division branch runs24Hours' }, { path: 'branch', select: 'name code divisions' }]);
-    return { token, serverTime: now.toISOString(), timeZone: 'Africa/Accra', user: { id: user._id, name: user.name, role: user.role, username: user.username, branch: user.branch, branches: user.branches, outlets: user.outlets, permissions: user.permissions || [] } };
+    return { token, serverTime: now.toISOString(), timeZone: 'Africa/Accra', user: { id: user._id, name: user.name, role: user.role, username: user.username, avatarUrl: user.avatarUrl, branch: user.branch, branches: user.branches, outlets: user.outlets, permissions: user.permissions || [] } };
   });
 
   fastify.get('/api/auth/me', { preHandler: [fastify.authenticate] }, async (request) => {
