@@ -17,7 +17,12 @@ const purchaseOrderSchema = new mongoose.Schema(
     outlet: { type: mongoose.Schema.Types.ObjectId, ref: 'Outlet', index: true },
     items: [lineItemSchema],
     amount: { type: Number, required: true },
+    paid: { type: Number, default: 0 },
+    balance: { type: Number, default: 0 },
+    payments: [{ method: String, amount: Number, reference: String, paidAt: Date }],
     status: { type: String, enum: ['pending', 'approved', 'delivered'], default: 'pending' },
+    postedAt: Date,
+    legacySource: { system: String, id: String, warehouse: String, importedAt: Date },
   },
   { timestamps: true }
 );

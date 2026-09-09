@@ -36,6 +36,15 @@ const saleSchema = new mongoose.Schema(
     postedAt: { type: Date, default: Date.now },
     reversalOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Sale' },
     notes: String,
+    legacySource: {
+      system: String,
+      rowKey: { type: String, index: true },
+      reference: String,
+      biller: String,
+      paymentStatus: String,
+      importedAt: Date,
+      itemPricing: String,
+    },
   },
   { timestamps: true }
 );

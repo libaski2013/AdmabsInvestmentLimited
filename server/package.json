@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "seed": "node src/utils/seed.js",
     "migrate:legacy": "node src/utils/migrate-legacy.js",
-    "migrate:legacy:apply": "node src/utils/migrate-legacy.js --apply"
+    "migrate:legacy:apply": "node src/utils/migrate-legacy.js --apply",
+    "migrate:transactions": "node src/utils/migrate-transactions.js",
+    "migrate:transactions:apply": "node src/utils/migrate-transactions.js --apply"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

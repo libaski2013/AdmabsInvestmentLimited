@@ -13,6 +13,7 @@ const customerSchema = new mongoose.Schema(
     branch: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
     outlet: { type: mongoose.Schema.Types.ObjectId, ref: 'Outlet', index: true },
     active: { type: Boolean, default: true },
+    legacySource: { system: String, nameKey: { type: String, index: true }, importedAt: Date },
   },
   { timestamps: true }
 );
