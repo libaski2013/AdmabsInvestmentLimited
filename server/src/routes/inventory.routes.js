@@ -141,6 +141,17 @@ export default async function inventoryRoutes(fastify) {
     }
   );
 
+  fastify.post('/api/products/bulk-archive', { preHandler: [fastify.authenticate, fastify.requireRole('ceo', 'gm')] }, async (request, reply) => {
+    const ids = [...new Set((request.body?.ids || []).map(String).filter(Boolean))];
+    if (!ids.length) return reply.code(400).send({ error: 'Select at least one inventory item' });
+    if (ids.length > 500) return reply.code(400).send({ error: 'A maximum of 500 inventory items can be deleted at once' });
+    const result = await Product.updateMany(
+      { _id: { $in: ids }, active: true, ...fastify.scopeFilter(request) },
+      { $set: { active: false, websiteVisible: false } },
+    );
+    return { selected: ids.length, archived: result.modifiedCount };
+  });
+
   fastify.delete('/api/products/:id', { preHandler: [fastify.authenticate, fastify.requireRole('ceo', 'gm')] }, async (request, reply) => {
     const product = await Product.findByIdAndUpdate(request.params.id, { active: false, websiteVisible: false }, { new: true });
     if (!product) return reply.code(404).send({ error: 'Product not found' });
