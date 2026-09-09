@@ -30,6 +30,7 @@ import smsRoutes from './routes/sms.routes.js';
 import toolsRoutes from './routes/tools.routes.js';
 import performanceRoutes from './routes/performance.routes.js';
 import workforceRoutes from './routes/workforce.routes.js';
+import MigrationRun from './models/MigrationRun.js';
 
 const fastify = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 });
 
@@ -71,7 +72,10 @@ await fastify.register(toolsRoutes);
 await fastify.register(performanceRoutes);
 await fastify.register(workforceRoutes);
 
-fastify.get('/api/health', async () => ({ ok: true }));
+fastify.get('/api/health', async () => {
+  const migration = await MigrationRun.findOne({ key: 'legacy-transactions-2026-09-09-v1' }).select('status').lean();
+  return { ok: true, release: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', legacyTransactions: migration?.status || 'pending' };
+});
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(currentDir, '../../dist');
 await fastify.register(fastifyStatic, { root: webRoot, wildcard: false });
