@@ -38,13 +38,12 @@ export default async function dashboardRoutes(fastify) {
     if (!['super_admin', 'ceo', 'gm'].includes(request.user.role) && request.query?.outlet && !request.user.outletIds?.includes(String(request.query.outlet))) return reply.code(403).send({ error: 'Outlet is outside your assignment' });
     if (request.query?.branch) scope.branch = request.query.branch;
     if (request.query?.outlet) scope.outlet = request.query.outlet;
-    const [salesThisMonth, allSales, expensesThisMonth, customers, scopedProducts, pendingApprovals] =
+    const [salesThisMonth, expensesThisMonth, customers, scopedProducts, pendingApprovals] =
       await Promise.all([
-        Sale.find({ ...scope, createdAt: { $gte: monthStart, $lt: monthEnd }, status: 'posted' }),
-        Sale.find(scope).sort({ createdAt: -1 }).limit(500),
-        Expense.find({ ...fastify.scopeFilter(request, 'branchRef', 'outlet'), createdAt: { $gte: monthStart, $lt: monthEnd }, status: { $ne: 'rejected' } }),
-        Customer.find(),
-        Product.find({ ...scope, active: true }),
+        Sale.find({ ...scope, createdAt: { $gte: monthStart, $lt: monthEnd }, status: 'posted' }).select('total subtotal tax items payments paymentMethod branch createdAt').lean(),
+        Expense.find({ ...fastify.scopeFilter(request, 'branchRef', 'outlet'), createdAt: { $gte: monthStart, $lt: monthEnd }, status: { $ne: 'rejected' } }).select('amount').lean(),
+        Customer.find({ ...scope, active: { $ne: false } }).select('balance').lean(),
+        Product.find({ ...scope, active: true }).select('name qty reorderLevel cost').lean(),
         Approval.countDocuments({ status: 'pending' }),
       ]);
     const lowStock = scopedProducts.filter(p => p.qty <= p.reorderLevel);
@@ -84,11 +83,11 @@ export default async function dashboardRoutes(fastify) {
 
     const chartEnd = request.query?.end ? new Date(`${request.query.end}T23:59:59.999Z`) : new Date();
     const chartStart = request.query?.start ? new Date(`${request.query.start}T00:00:00.000Z`) : new Date(chartEnd.getFullYear(), chartEnd.getMonth() - 12, 1);
-    const chartSales = await Sale.find({ ...scope, status: 'posted', createdAt: { $gte: chartStart, $lte: chartEnd } }).lean();
+    const chartSales = await Sale.find({ ...scope, status: 'posted', createdAt: { $gte: chartStart, $lte: chartEnd } }).select('subtotal tax createdAt').lean();
     const purchaseScope = fastify.scopeFilter(request);
     if (request.query?.branch) purchaseScope.branch = request.query.branch;
     if (request.query?.outlet) purchaseScope.outlet = request.query.outlet;
-    const chartPurchases = await PurchaseOrder.find({ ...purchaseScope, status: { $in: ['approved', 'delivered'] }, createdAt: { $gte: chartStart, $lte: chartEnd } }).lean();
+    const chartPurchases = await PurchaseOrder.find({ ...purchaseScope, status: { $in: ['approved', 'delivered'] }, createdAt: { $gte: chartStart, $lte: chartEnd } }).select('amount tax createdAt').lean();
     const overviewMap = new Map();
     const cursor = new Date(chartStart.getFullYear(), chartStart.getMonth(), 1);
     const lastMonth = new Date(chartEnd.getFullYear(), chartEnd.getMonth(), 1);

@@ -30,6 +30,7 @@ import smsRoutes from './routes/sms.routes.js';
 import toolsRoutes from './routes/tools.routes.js';
 import performanceRoutes from './routes/performance.routes.js';
 import workforceRoutes from './routes/workforce.routes.js';
+import taxRoutes from './routes/tax.routes.js';
 import MigrationRun from './models/MigrationRun.js';
 
 const fastify = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 });
@@ -71,6 +72,7 @@ await fastify.register(smsRoutes);
 await fastify.register(toolsRoutes);
 await fastify.register(performanceRoutes);
 await fastify.register(workforceRoutes);
+await fastify.register(taxRoutes);
 
 fastify.get('/api/health', async () => {
   const migration = await MigrationRun.findOne({ key: 'legacy-transactions-2026-09-09-v1' }).select('status error').lean();

@@ -488,6 +488,7 @@ function POS({ user, market = false }) {
     [method, setMethod] = useState("Cash"),
     [err, setErr] = useState(""),
     [done, setDone] = useState(null),
+    [site, setSite] = useState({}),
     [shift, setShift] = useState(null);
   const cats = market
     ? ["Grocery", "Beverages", "Snacks", "Household", "Dairy", "Bakery"]
@@ -499,6 +500,7 @@ function POS({ user, market = false }) {
       .catch((e) => setErr(e.message));
   useEffect(() => {
     load();
+    api.siteContent().then(setSite).catch(() => {});
   }, []);
   const shown = products.filter(
     (p) =>
@@ -585,10 +587,15 @@ function POS({ user, market = false }) {
       {done && (
         <Modal title="Transaction complete" onClose={() => setDone(null)}>
           <div className="center">
-            <img className="receipt-logo" src="/admabs-logo.png" alt="ADMABS Investments Ltd." />
-            <h2>ADMABS INVESTMENT LIMITED</h2>
+            <img className="receipt-logo" src={site.logoUrl || "/admabs-logo.png"} alt="ADMABS Investments Ltd." />
+            <h2>{site.companyName || "ADMABS INVESTMENTS LTD."}</h2>
+            <p className="muted">HEAD OFFICE: {site.address || "Ghana"}</p>
+            <hr />
+            <b>{user.branch?.name || user.branches?.[0]?.name || "ADMABS Branch"}</b>
+            <p className="muted">{user.outlets?.[0]?.name || "Main outlet"}</p>
             <p>{done.invoiceNumber}</p>
             <h1>{money(done.total)}</h1>
+            <p>{new Date(done.createdAt || Date.now()).toLocaleString()}</p>
             <p className="muted">
               Receipt uses the company logo and central transaction record.
             </p>
@@ -893,6 +900,7 @@ function SimpleRecords({ type }) {
     [selected, setSelected] = useState(null),
     [statement, setStatement] = useState(null),
     [payment, setPayment] = useState(null),
+    [search, setSearch] = useState(""),
     [err, setErr] = useState("");
   const load = () =>
     customers
@@ -926,8 +934,9 @@ function SimpleRecords({ type }) {
         </button>
       </div>
       {err && <p className="error">{err}</p>}
+      {customers && <input className="field" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, email or location" />}
       <div className="card">
-        {list.map((x) => (
+        {list.filter((x) => !customers || !search || [x.name,x.phone,x.email,x.branch?.name,x.outlet?.name].some((value) => String(value || "").toLowerCase().includes(search.toLowerCase()))).map((x) => (
           <div className="item row between" key={x._id} onClick={() => customers && api.customerStatement(x._id).then((s) => { setSelected(x); setStatement(s); }).catch((e) => setErr(e.message))}>
             <div>
               <p>

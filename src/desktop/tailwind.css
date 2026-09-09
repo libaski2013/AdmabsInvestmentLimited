@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @media print {
+  body:has(.statement-document) * { visibility: hidden !important; }
+  body:has(.statement-document) .statement-document, body:has(.statement-document) .statement-document * { visibility: visible !important; }
+  body:has(.statement-document) .statement-document { display: block !important; position: absolute; inset: 0; width: 100%; }
   body.printing-receipt * { visibility: hidden !important; }
   body.printing-receipt .receipt-print, body.printing-receipt .receipt-print * { visibility: visible !important; }
   body.printing-receipt .receipt-print {

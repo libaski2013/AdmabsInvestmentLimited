@@ -316,6 +316,8 @@ function PosPanel({ title, color, categoryFilter, categories, user, shiftControl
 
   if (pos.done) {
     const r = pos.done;
+    const receiptBranch=[user?.branch,...(user?.branches||[])].filter(Boolean).find(branch=>String(branch._id||branch)===String(r.branch))||user?.branch;
+    const receiptOutlet=(user?.outlets||[]).find(outlet=>String(outlet._id||outlet)===String(r.outlet));
     return (
       <Modal title="Receipt" onClose={() => pos.setDone(null)}>
         <div className="space-y-4">
@@ -327,6 +329,7 @@ function PosPanel({ title, color, categoryFilter, categories, user, shiftControl
             <div className="text-center mb-3"><img src={site.logoUrl || '/admabs-logo.png'} alt="ADMABS Investments Ltd." className="h-14 max-w-56 object-contain mx-auto mb-1" /><p className="font-black text-blue-900">{site.companyName || 'ADMABS INVESTMENTS LTD.'}</p><p className="text-gray-500">SALES RECEIPT</p></div>
             <div className="flex justify-between"><span>Invoice</span><b>{r.invoiceNumber}</b></div>
             <div className="flex justify-between"><span>Date</span><span>{new Date(r.createdAt || Date.now()).toLocaleString()}</span></div>
+            <div className="text-center border-y border-dashed py-2 my-2"><p className="font-black">{receiptBranch?.name||'ADMABS HEAD OFFICE'}</p><p className="text-gray-500">{receiptOutlet?.name||'Main outlet'}</p><p className="text-gray-500">{receiptBranch?.address||receiptBranch?.city||site.address||'Ghana'}{receiptBranch?.phone?` · ${receiptBranch.phone}`:''}</p></div>
             <div className="flex justify-between"><span>Shift</span><span className="capitalize">{r.workShift || 'day'}</span></div>
             {r.items.map((i, j) => <div key={j} className="flex justify-between"><span>{i.n} ×{i.qty}</span><span className="font-bold">{fmt(i.price * i.qty)}</span></div>)}
             <div className="border-t border-dashed border-gray-200 pt-1 mt-1">
@@ -640,20 +643,24 @@ function ExpensesView() {
 // ─── CUSTOMERS ───
 function CustView({ user }) {
   const [customers, setCustomers] = useState([]);
+  const [customerSearch,setCustomerSearch]=useState('');
   const [selId, setSelId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modal,setModal]=useState(null); const [form,setForm]=useState({type:'Retail'}); const [branches,setBranches]=useState([]); const [outlets,setOutlets]=useState([]); const [err,setErr]=useState('');
-  const [statement,setStatement]=useState(null); const [statementFilters,setStatementFilters]=useState({start:'',end:'',branch:'',outlet:''}); const [payment,setPayment]=useState(null);
+  const [statement,setStatement]=useState(null); const [statementFilters,setStatementFilters]=useState({start:'',end:'',branch:'',outlet:''}); const [payment,setPayment]=useState(null); const [paymentReceipt,setPaymentReceipt]=useState(null); const [site,setSite]=useState({});
   const load=()=>api.customers().then(list => { setCustomers(list); if (list[0]&&!selId) setSelId(list[0]._id); }).catch(e=>setErr(e.message)).finally(() => setLoading(false));
-  useEffect(() => { load(); Promise.all([api.branches(),api.outlets()]).then(([b,o])=>{setBranches(b);setOutlets(o);}).catch(()=>{}); }, []);
+  useEffect(() => { load(); Promise.all([api.branches(),api.outlets(),api.siteContent()]).then(([b,o,s])=>{setBranches(b);setOutlets(o);setSite(s);}).catch(()=>{}); }, []);
   const loadStatement=()=>selId&&api.customerStatement(selId,Object.fromEntries(Object.entries(statementFilters).filter(([,v])=>v))).then(setStatement).catch(e=>setErr(e.message));
   useEffect(()=>{setStatement(null);if(selId)loadStatement();},[selId]);
   const save=async e=>{e.preventDefault();setErr('');try{modal==='new'?await api.createCustomer(form):await api.updateCustomer(modal._id,form);setModal(null);await load();}catch(x){setErr(x.message);}};
   const sel = customers.find(c => c._id === selId);
   const creditOut = customers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
+  const visibleCustomers=customers.filter(c=>!customerSearch||[c.name,c.phone,c.email,c.type,c.branch?.name,c.outlet?.name].some(value=>String(value||'').toLowerCase().includes(customerSearch.toLowerCase())));
+  const printArea=kind=>{document.body.classList.add(`printing-${kind}`);window.print();setTimeout(()=>document.body.classList.remove(`printing-${kind}`),250)};
 
   return (
     <div className="space-y-5">
+      {statement&&sel&&<div className="statement-document hidden bg-white text-black p-8"><div className="text-center border-b-2 border-blue-900 pb-4 mb-5"><img src={site.logoUrl||'/admabs-logo.png'} alt="ADMABS" className="h-20 max-w-72 object-contain mx-auto"/><h1 className="text-xl font-black text-blue-950">{site.companyName||'ADMABS INVESTMENTS LTD.'}</h1><p className="text-xs">HEAD OFFICE: {site.address||'Ghana'} · {[site.phone,site.email].filter(Boolean).join(' · ')}</p><h2 className="font-black mt-4">CUSTOMER ACCOUNT STATEMENT</h2></div><div className="flex justify-between text-sm mb-4"><div><b>{sel.name}</b><p>{sel.phone||''} · {sel.email||''}</p></div><div className="text-right"><p>Generated: {new Date().toLocaleString()}</p><p>Period: {statementFilters.start||'Beginning'} — {statementFilters.end||'Today'}</p></div></div><table className="w-full text-xs"><thead><tr>{['Date / Reference','Branch / Outlet','Transaction','Debit','Credit','Balance Due'].map(h=><th key={h} className="border p-2 text-left">{h}</th>)}</tr></thead><tbody>{statement.purchases.map(x=><tr key={x._id}><td className="border p-2">{new Date(x.createdAt).toLocaleDateString()}<br/>{x.invoiceNumber}</td><td className="border p-2">{x.branch?.name||'Head Office'}<br/>{x.outlet?.name||''}</td><td className="border p-2">Purchase</td><td className="border p-2">{fmt(x.total)}</td><td className="border p-2">{fmt(x.paidAtSale+x.paidLater)}</td><td className="border p-2">{fmt(x.amountDue)}</td></tr>)}{statement.payments.map(x=><tr key={x._id}><td className="border p-2">{new Date(x.receivedAt).toLocaleDateString()}<br/>{x.receiptNumber}</td><td className="border p-2">{x.branch?.name||'Head Office'}<br/>{x.outlet?.name||''}</td><td className="border p-2">Payment · {x.method}</td><td className="border p-2">—</td><td className="border p-2">{fmt(x.amount)}</td><td className="border p-2">—</td></tr>)}</tbody></table><div className="mt-5 ml-auto max-w-xs border-t-2 pt-3 text-sm"><div className="flex justify-between"><span>Total purchases</span><b>{fmt(statement.summary.purchaseTotal)}</b></div><div className="flex justify-between"><span>Payments received</span><b>{fmt(statement.summary.paymentsReceived)}</b></div><div className="flex justify-between text-red-700 text-base"><span>Balance due</span><b>{fmt(statement.summary.balance)}</b></div></div><p className="text-center text-xs mt-8 border-t pt-3">This computer-generated statement is issued by ADMABS Investments Ltd.</p></div>}
       <div className="flex justify-between"><div><h2 className="text-xl font-black text-blue-900">Customers & Fleet</h2><p className="text-sm text-gray-500">Branch-linked accounts, credit balances and loyalty</p></div><button onClick={()=>{setModal('new');setForm({type:'Retail',branch:user?.branch?._id||'',outlet:''});}} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Add Customer</button></div>
       {err&&<p className="text-xs text-red-600">⚠ {err}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -665,7 +672,8 @@ function CustView({ user }) {
       {loading ? <p className="text-xs text-gray-400">Loading…</p> : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="lg:col-span-2 space-y-2">
-            {customers.map(c => (
+            <div className="relative"><Search size={15} className="absolute left-3 top-3 text-gray-400"/><input value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Search name, phone, email, branch or outlet" className="w-full bg-white border rounded-xl py-2.5 pl-9 pr-3 text-xs"/></div>
+            {visibleCustomers.map(c => (
               <button key={c._id} onClick={() => setSelId(c._id)} className={`w-full text-left bg-white rounded-xl border p-3.5 shadow-sm transition-all hover:shadow-md ${selId === c._id ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-100'}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
@@ -742,7 +750,17 @@ function ApprovalsView({ onChanged }) {
 }
 
 // ─── FINANCE ───
-function FinView() {
+function AnnualTaxPanel({user}) {
+  const [records,setRecords]=useState([]),[form,setForm]=useState(null),[err,setErr]=useState('');
+  const canEdit=['super_admin','ceo'].includes(user?.role)||(user?.permissions||[]).includes('tax.manage');
+  const load=()=>api.taxFilings().then(setRecords).catch(e=>setErr(e.message));
+  useEffect(()=>{load()},[]);
+  const edit=r=>setForm(r?{...r,taxRate:+(r.taxRate*100).toFixed(2),filingDueDate:r.filingDueDate?.slice(0,10)}:{year:new Date().getFullYear(),taxableIncome:0,taxRate:25,amountPaid:0,filingDueDate:`${new Date().getFullYear()+1}-04-30`,status:'draft'});
+  const save=async e=>{e.preventDefault();try{const body={...form,taxRate:Number(form.taxRate)/100};form._id?await api.updateTaxFiling(form._id,body):await api.createTaxFiling(body);setForm(null);load()}catch(x){setErr(x.message)}};
+  return <div className="bg-white border rounded-xl p-5 space-y-3"><div className="flex justify-between gap-3"><div><h3 className="font-black text-blue-950">Annual Company Tax Filing</h3><p className="text-xs text-gray-500">Prepare, review, file and record annual company-tax payments.</p></div>{canEdit&&<button onClick={()=>edit()} className="px-3 py-2 bg-red-600 text-white rounded-xl text-xs font-black">+ Tax Year</button>}</div>{err&&<p className="text-xs text-red-600">⚠ {err}</p>}<div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Year','Taxable income','Rate','Tax due','Paid','Balance','Due','Status',''].map(h=><th key={h} className="p-2 text-left">{h}</th>)}</tr></thead><tbody className="divide-y">{records.map(r=><tr key={r._id}><td className="p-2 font-black">{r.year}</td><td>{fmt(r.taxableIncome)}</td><td>{(r.taxRate*100).toFixed(2)}%</td><td>{fmt(r.taxDue)}</td><td>{fmt(r.amountPaid)}</td><td className="font-black">{fmt(Math.max(0,r.taxDue-r.amountPaid))}</td><td>{r.filingDueDate?new Date(r.filingDueDate).toLocaleDateString():'—'}</td><td><Bd label={r.status} v={r.status==='paid'?'green':r.status==='overdue'?'red':'yellow'}/></td><td>{canEdit&&<button onClick={()=>edit(r)} className="text-blue-700 font-bold">Edit</button>}</td></tr>)}</tbody></table></div>{form&&<Modal title="Annual company tax record" onClose={()=>setForm(null)}><form onSubmit={save} className="space-y-3">{[['year','Tax year','number'],['taxableIncome','Taxable income','number'],['taxRate','Tax rate (%)','number'],['amountPaid','Amount paid','number'],['filingDueDate','Filing due date','date'],['tin','Company TIN','text'],['filingReference','Filing reference','text']].map(([k,l,t])=><label key={k} className="block text-xs font-bold text-gray-500">{l}<input type={t} required={['year','taxableIncome','taxRate'].includes(k)} step={t==='number'?'0.01':undefined} value={form[k]||''} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label>)}<label className="block text-xs font-bold text-gray-500">Status<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5 bg-white">{['draft','prepared','filed','paid','overdue'].map(x=><option key={x}>{x}</option>)}</select></label><label className="block text-xs font-bold text-gray-500">Notes<textarea value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})} className="mt-1 w-full border rounded-xl p-2.5"/></label><button className="w-full py-3 bg-blue-900 text-white rounded-xl font-black">Save tax record</button></form></Modal>}</div>;
+}
+
+function FinView({user}) {
   const [d, setD] = useState(null);
   useEffect(() => { api.dashboard().then(setD).catch(() => {}); }, []);
   return (
@@ -765,6 +783,7 @@ function FinView() {
         </div>
       </div>
       <div className="grid md:grid-cols-3 gap-3">{[['Double-entry ledger','Every posted sale creates a balanced accounting journal.'],['Controlled corrections','Posted records are reversed or voided, never silently deleted.'],['Branch drill-down','Reports respect each user’s assigned branches and outlets.']].map(([title,body]) => <div key={title} className="bg-blue-50 border border-blue-100 rounded-xl p-4"><p className="text-xs font-black text-blue-950">{title}</p><p className="text-xs text-blue-700 mt-1 leading-relaxed">{body}</p></div>)}</div>
+      <AnnualTaxPanel user={user}/>
     </div>
   );
 }

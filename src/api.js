@@ -83,6 +83,9 @@ export const api = {
   createUser: body => request('/users', { method: 'POST', body }),
   updateUser: (id, body) => request(`/users/${id}`, { method: 'PATCH', body }),
   updateMyProfile: body => request('/users/me/profile', { method: 'PATCH', body }),
+  taxFilings: () => request('/tax-filings'),
+  createTaxFiling: body => request('/tax-filings', { method: 'POST', body }),
+  updateTaxFiling: (id, body) => request(`/tax-filings/${id}`, { method: 'PATCH', body }),
 
   products: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

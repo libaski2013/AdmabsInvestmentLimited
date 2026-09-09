@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   'staff.manage', 'branches.manage', 'system.settings.manage', 'inventory.search_all',
   'payroll.manage', 'sms.manage', 'data.manage', 'performance.manage',
   'shifts.manage', 'attendance.view', 'customers.payment.receive', 'inventory.price.adjust',
+  'tax.manage',
 ];
 
 export default async function userRoutes(fastify) {
