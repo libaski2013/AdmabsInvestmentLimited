@@ -5,7 +5,7 @@
     "buildCommand": "npm run build && npm --prefix server ci --omit=dev"
   },
   "deploy": {
-    "startCommand": "npm --prefix server run migrate:legacy:apply && npm --prefix server run migrate:transactions:apply && npm --prefix server start",
+    "startCommand": "npm --prefix server start",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",

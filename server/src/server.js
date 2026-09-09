@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { connectDB } from './config/db.js';
 import authPlugin from './plugins/auth.js';
 
@@ -82,7 +83,13 @@ fastify.setNotFoundHandler((request, reply) => {
 const port = Number(process.env.PORT) || 4000;
 fastify
   .listen({ port, host: '0.0.0.0' })
-  .then(() => fastify.log.info(`ADMABS backend listening on port ${port}`))
+  .then(() => {
+    fastify.log.info(`ADMABS backend listening on port ${port}`);
+    if (process.env.RUN_LEGACY_MIGRATION !== 'false') {
+      const migration = spawn(process.execPath, [path.resolve(currentDir, 'utils/migrate-transactions.js'), '--apply'], { stdio: 'inherit' });
+      migration.on('exit', code => code === 0 ? fastify.log.info('Legacy transaction migration completed') : fastify.log.error(`Legacy transaction migration exited with code ${code}`));
+    }
+  })
   .catch((err) => {
     fastify.log.error(err);
     process.exit(1);
