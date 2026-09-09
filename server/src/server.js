@@ -73,8 +73,8 @@ await fastify.register(performanceRoutes);
 await fastify.register(workforceRoutes);
 
 fastify.get('/api/health', async () => {
-  const migration = await MigrationRun.findOne({ key: 'legacy-transactions-2026-09-09-v1' }).select('status').lean();
-  return { ok: true, release: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', legacyTransactions: migration?.status || 'pending' };
+  const migration = await MigrationRun.findOne({ key: 'legacy-transactions-2026-09-09-v1' }).select('status error').lean();
+  return { ok: true, release: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', legacyTransactions: migration?.status || 'pending', ...(migration?.status === 'failed' ? { migrationError: String(migration.error || 'Unknown migration error').slice(0, 300) } : {}) };
 });
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(currentDir, '../../dist');
