@@ -32,8 +32,8 @@ const staffDataPath = path.resolve(currentDir, '../../data/admabs-legacy-staff.j
 const apply = process.argv.includes('--apply');
 const models = { JournalEntry, FuelDip, FuelShift, FuelDelivery, FuelPump, FuelTank, CashReconciliation, Sale, PurchaseOrder, Expense, Approval, Product, Customer, Supplier, User, Outlet, Branch };
 const legacySystem = 'shop.admabsgh.com';
-const migrationKey = 'legacy-inventory-and-staff-2026-09-09';
-const staffMigrationKey = 'legacy-staff-2026-09-09';
+const migrationKey = 'legacy-inventory-and-staff-2026-09-09-v2';
+const staffMigrationKey = 'legacy-staff-2026-09-09-v2';
 
 const number = value => Number(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
 const codeFor = (name, id) => `${name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 18)}-${id}`.toUpperCase();
@@ -75,7 +75,7 @@ async function migrateStaff(locationMap, importedAt) {
       const name = normalize(item.branch.name);
       return name && (locationText.includes(name) || name.includes(locationText));
     });
-    let username = normalize(email).replace(/\s+/g, '.') || normalize(`${firstName}.${lastName}`).replace(/\s+/g, '.');
+    let username = normalize(String(email || '').split('@')[0]).replace(/\s+/g, '.') || normalize(`${firstName}.${lastName}`).replace(/\s+/g, '.');
     if (!username) username = `legacy.staff.${record.legacyId}`;
     const base = username;
     let suffix = 1;
