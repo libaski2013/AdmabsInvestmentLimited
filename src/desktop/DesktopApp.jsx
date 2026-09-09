@@ -105,13 +105,14 @@ const Bd = ({ label, v = 'gray' }) => {
 };
 
 const Kpi = ({ label, val, sub, pos, Ic, bg }) => (
-  <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex items-start justify-between gap-3">
+  <div className="group relative overflow-hidden bg-white rounded-xl p-4 border border-gray-100 shadow-sm flex items-start justify-between gap-3 transition-all duration-300 hover:-translate-y-1 hover:scale-[1.035] hover:shadow-xl hover:border-blue-200">
+    <span className={`absolute inset-x-0 top-0 h-1 ${bg}`} />
     <div className="min-w-0">
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
-      <p className="text-base font-bold text-gray-800 mt-0.5 leading-tight">{val}</p>
+      <p className="text-base font-black text-gray-800 mt-0.5 leading-tight transition-all duration-300 group-hover:text-blue-950 group-hover:scale-105 origin-left">{val}</p>
       {sub && <p className={`text-xs mt-0.5 flex items-center gap-0.5 ${pos === true ? 'text-green-600' : pos === false ? 'text-red-500' : 'text-gray-400'}`}>{pos === true && <ArrowUpRight size={10} />}{pos === false && <TrendingDown size={10} />}{sub}</p>}
     </div>
-    <div className={`${bg} w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0`}><Ic size={16} className="text-white" /></div>
+    <div className={`${bg} w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}><Ic size={16} className="text-white" /></div>
   </div>
 );
 
@@ -451,22 +452,28 @@ function InvView({ user }) {
   const [edit, setEdit] = useState(null); const [form, setForm] = useState({}); const [branches, setBranches] = useState([]); const [outlets, setOutlets] = useState([]); const [err, setErr] = useState('');
   const [scanner,setScanner]=useState(false); const [restock,setRestock]=useState(null); const [stockForm,setStockForm]=useState({quantity:'',reference:'',notes:''});
   const [priceAdjust,setPriceAdjust]=useState(null); const [pricePreview,setPricePreview]=useState(null);
-  const load = () => api.products({q:search,branch:branchFilter,outlet:outletFilter,allOutlets:searchAll?'true':''}).then(setProducts).catch(e => setErr(e.message)).finally(() => setLoading(false));
+  const [selected,setSelected]=useState([]); const [deleting,setDeleting]=useState(false);
+  const load = () => api.products({q:search,branch:branchFilter,outlet:outletFilter,allOutlets:searchAll?'true':''}).then(items=>{setProducts(items);setSelected([])}).catch(e => setErr(e.message)).finally(() => setLoading(false));
   useEffect(() => { load(); Promise.all([api.branches(), api.outlets()]).then(([b,o]) => { setBranches(b); setOutlets(o); }).catch(() => {}); }, []);
   const canEdit = ['super_admin','ceo','gm','branch','sub_manager','storekeeper'].includes(user?.role) || user?.permissions?.includes('inventory.update') || user?.permissions?.includes('inventory.create');
   const canSearchAll=['super_admin','ceo','gm'].includes(user?.role)||user?.permissions?.includes('inventory.search_all');
   const canAdjustPrices=['super_admin','ceo','gm'].includes(user?.role)||user?.permissions?.includes('inventory.price.adjust');
+  const canDelete=['super_admin','ceo','gm'].includes(user?.role);
   const save = async e => { e.preventDefault(); setErr(''); try { const body = { ...form, barcode: form.barcode || form.code, qrCode: form.qrCode || form.code, qty: Number(form.qty), reorderLevel: Number(form.reorderLevel), price: Number(form.price), cost: Number(form.cost), websiteVisible: form.websiteVisible !== false }; edit === 'new' ? await api.createProduct(body) : await api.updateProduct(edit._id, body); setEdit(null); await load(); } catch (x) { setErr(x.message); } };
   const handleStockScan = async code => { setScanner(false); try { const product = await api.scanProduct(code); setRestock(product); setStockForm({ quantity:'', reference:'', notes:'' }); } catch { setEdit('new'); setForm({ code, barcode:code, qrCode:code, category:'Grocery', qty:0, reorderLevel:5, price:0, cost:0, websiteVisible:false }); setErr('Code is new. Complete the product details to register it.'); } };
   const low = products.filter(p => p.qty <= p.reorderLevel);
   const divisionCategories=division==='supermarket'?['Grocery','Beverages','Snacks','Household','Bakery','Dairy']:division==='services'?['Service']:['Tyre','Rim','Battery','Lubricant'];
   const filtered = (filter === 'low' ? low : products).filter(p=>divisionCategories.includes(p.category));
+  const visibleIds=filtered.map(p=>String(p._id)); const allVisibleSelected=visibleIds.length>0&&visibleIds.every(id=>selected.includes(id));
+  const toggleSelected=id=>setSelected(current=>current.includes(String(id))?current.filter(x=>x!==String(id)):[...current,String(id)]);
+  const toggleAllVisible=()=>setSelected(current=>allVisibleSelected?current.filter(id=>!visibleIds.includes(id)):[...new Set([...current,...visibleIds])]);
+  const deleteSelected=async()=>{if(!selected.length||deleting)return;if(!confirm(`Delete ${selected.length} selected inventory item${selected.length===1?'':'s'}? They will also be removed from the public website.`))return;setDeleting(true);setErr('');try{const result=await api.deleteProducts(selected);await load();setErr(`${result.archived} inventory item${result.archived===1?'':'s'} deleted successfully.`)}catch(x){setErr(x.message)}finally{setDeleting(false)}};
   const stockValue = products.reduce((s, p) => s + p.qty * (p.cost || 0), 0);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-xl font-black text-blue-900">Inventory & Services by Outlet</h2><p className="text-sm text-gray-500">Automotive stock, supermarket stock and non-stock services are managed separately at each outlet</p></div><div className="flex flex-wrap gap-2"><div className="flex border rounded-xl bg-white p-1"><button onClick={()=>setView('thumbnail')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view==='thumbnail'?'bg-blue-900 text-white':'text-gray-500'}`}>▦ Thumbnails</button><button onClick={()=>setView('list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view==='list'?'bg-blue-900 text-white':'text-gray-500'}`}>☰ List</button></div>{canAdjustPrices&&division==='tyres'&&<button onClick={()=>{setPriceAdjust({categories:['Tyre','Rim','Battery'],branch:branchFilter,outlet:outletFilter,mode:'percentage',value:'',rounding:'0.01',reason:''});setPricePreview(null)}} className="px-4 py-2 border border-red-200 text-red-700 rounded-xl text-xs font-black">Adjust Prices</button>}{canEdit && <>{division!=='services'&&<button onClick={()=>setScanner(true)} className="px-4 py-2 border border-blue-200 text-blue-900 rounded-xl text-xs font-black">▣ Scan to Stock</button>}<button onClick={() => { setEdit('new'); setForm({ category:division==='supermarket'?'Grocery':division==='services'?'Service':'Tyre', qty:0, reorderLevel:division==='services'?0:5, price:0, cost:0, websiteVisible:true }); }} className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black">{division==='services'?'+ Add Service':'+ Add Product'}</button></>}</div></div>
-      {err && <p className="text-xs text-red-600">⚠ {err}</p>}
+      {err && <p className={`text-xs ${/successfully/i.test(err)?'text-green-700':'text-red-600'}`}>{/successfully/i.test(err)?'✓':'⚠'} {err}</p>}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Total SKUs" val={String(products.length)} Ic={Package} bg="bg-blue-900" />
         <Kpi label="Low Stock" val={String(low.length)} pos={false} Ic={AlertTriangle} bg="bg-red-600" />
@@ -474,14 +481,16 @@ function InvView({ user }) {
         <Kpi label="Categories" val={String(new Set(products.map(p => p.category)).size)} Ic={Store} bg="bg-blue-600" />
       </div>
       <div className="bg-white border rounded-xl p-3 space-y-3"><Tabs tabs={[{id:'tyres',label:'Tyres, Rims & Batteries'},{id:'supermarket',label:'Supermarket Inventory'},{id:'services',label:'Services'}]} active={division} onChange={v=>{setDivision(v);setFilter('all')}}/><div className="grid md:grid-cols-5 gap-2"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={division==='services'?'Service name or code':'Product, code or barcode'} className="border rounded-xl px-3 py-2 text-xs"/><select value={branchFilter} onChange={e=>{setBranchFilter(e.target.value);setOutletFilter('')}} className="border rounded-xl px-3 py-2 text-xs bg-white"><option value="">All available branches</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={outletFilter} onChange={e=>setOutletFilter(e.target.value)} className="border rounded-xl px-3 py-2 text-xs bg-white"><option value="">All available outlets</option>{outlets.filter(o=>!branchFilter||(o.branch?._id||o.branch)===branchFilter).map(o=><option key={o._id} value={o._id}>{o.name}</option>)}</select>{canSearchAll?<label className="flex items-center gap-2 text-xs font-bold p-2"><input type="checkbox" checked={searchAll} onChange={e=>setSearchAll(e.target.checked)}/> Search across company</label>:<div/>}<button onClick={load} className="bg-blue-900 text-white rounded-xl text-xs font-black">{division==='services'?'Search services':'Search stock'}</button></div>{division!=='services'&&<Tabs tabs={[{ id: 'all', label: 'All Stock' }, { id: 'low', label: `Low Stock (${low.filter(p=>divisionCategories.includes(p.category)).length})` }]} active={filter} onChange={setFilter} />}</div>
+      {canDelete&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3"><label className="flex items-center gap-2 text-xs font-bold text-blue-950"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible}/> Select all {visibleIds.length} visible items</label><div className="flex items-center gap-3"><span className="text-xs font-bold text-gray-500">{selected.length} selected</span><button disabled={!selected.length||deleting} onClick={deleteSelected} className="rounded-lg bg-red-600 px-4 py-2 text-xs font-black text-white disabled:opacity-40">{deleting?'Deleting…':'Delete selected'}</button></div></div>}
       {loading ? <p className="text-xs text-gray-400">Loading…</p> : (
         view==='list'?<div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-gray-50"><tr>{['Code', 'Product', 'Category', 'Location', 'Qty', 'Price', 'Website', 'Action'].map(h => <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-400 uppercase">{h}</th>)}</tr></thead>
+              <thead className="bg-gray-50"><tr>{canDelete&&<th className="px-4 py-2.5"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible inventory items"/></th>}{['Code', 'Product', 'Category', 'Location', 'Qty', 'Price', 'Website', 'Action'].map(h => <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-400 uppercase">{h}</th>)}</tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((p, i) => (
                   <tr key={i} className="hover:bg-gray-50">
+                    {canDelete&&<td className="px-4 py-2.5"><input type="checkbox" checked={selected.includes(String(p._id))} onChange={()=>toggleSelected(p._id)} aria-label={`Select ${p.name}`}/></td>}
                     <td className="px-4 py-2.5 font-mono text-blue-600 font-bold">{p.code}</td>
                     <td className="px-4 py-2.5 font-semibold text-gray-800">{p.name}</td>
                     <td className="px-4 py-2.5"><Bd label={p.category} v="gray" /></td>
