@@ -14,6 +14,7 @@ import { api, setToken } from "./api.js";
 const money = (n) =>
   `GH₵ ${Number(n || 0).toLocaleString("en-GH", { maximumFractionDigits: 2 })}`;
 const initials = (name) => (name || "U").split(" ").filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+const savedMobileUser = () => { try { return JSON.parse(localStorage.getItem("admabs_mobile_user") || "null"); } catch { return null; } };
 function ReceiptQr({ reference }) {
   const [src, setSrc] = useState("");
   useEffect(() => {
@@ -2490,8 +2491,8 @@ function Attendance({ user }) {
   );
 }
 export default function App() {
-  const [user, setUser] = useState(null),
-    [restoringSession, setRestoringSession] = useState(() => Boolean(localStorage.getItem("admabs_mobile_token"))),
+  const [user, setUser] = useState(savedMobileUser),
+    [restoringSession, setRestoringSession] = useState(() => Boolean(localStorage.getItem("admabs_mobile_token")) && !savedMobileUser()),
     [screen, setScreen] = useState(() => localStorage.getItem("admabs_mobile_screen") || "dash"),
     [drawer, setDrawer] = useState(false),
     [offset, setOffset] = useState(0),
@@ -2501,15 +2502,17 @@ export default function App() {
     [profileError, setProfileError] = useState(""),
     [profileSaving, setProfileSaving] = useState(false);
   useEffect(() => {
-    if (!localStorage.getItem("admabs_mobile_token")) { setRestoringSession(false); return; }
+    if (!localStorage.getItem("admabs_mobile_token")) { localStorage.removeItem("admabs_mobile_user"); setUser(null); setRestoringSession(false); return; }
     api.me().then(({ user: account }) => {
       const restored = { ...account, id: account._id || account.id };
       setUser(restored);
+      localStorage.setItem("admabs_mobile_user", JSON.stringify(restored));
       const allowed = [...(CONFIG[restored.role]?.mods || []), ...(restored.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
       const saved = localStorage.getItem("admabs_mobile_screen");
       setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
-    }).catch(() => setToken(null)).finally(() => setRestoringSession(false));
+    }).catch(() => { setToken(null); localStorage.removeItem("admabs_mobile_user"); setUser(null); }).finally(() => setRestoringSession(false));
   }, []);
+  useEffect(() => { if (user) localStorage.setItem("admabs_mobile_user", JSON.stringify(user)); }, [user]);
   useEffect(() => { if (user) localStorage.setItem("admabs_mobile_screen", screen); }, [screen, user]);
   const openProfile = () => {
     setProfileDraft(user?.avatarUrl || "");
@@ -2567,6 +2570,7 @@ export default function App() {
       <Login
         onLogin={(u) => {
           setUser(u);
+          localStorage.setItem("admabs_mobile_user", JSON.stringify(u));
           const allowed = [...(CONFIG[u.role]?.mods || []), ...(u.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
           const saved = localStorage.getItem("admabs_mobile_screen");
           setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
@@ -2618,6 +2622,7 @@ export default function App() {
       await api.logout();
     } catch {}
     setToken(null);
+    localStorage.removeItem("admabs_mobile_user");
     setUser(null);
   };
   return (
