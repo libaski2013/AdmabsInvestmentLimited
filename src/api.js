@@ -94,6 +94,7 @@ export const api = {
   updateProduct: (id, body) => request(`/products/${id}`, { method: 'PATCH', body }),
   createProduct: body => request('/products', { method: 'POST', body }),
   deleteProduct: id => request(`/products/${id}`, { method: 'DELETE' }),
+  deleteProducts: ids => request('/products/bulk-archive', { method: 'POST', body: { ids } }),
   scanProduct: code => request(`/products/scan/${encodeURIComponent(code)}`),
   receiveProductStock: (id, body) => request(`/products/${id}/stock`, { method: 'POST', body }),
   stockMovements: () => request('/stock-movements'),
