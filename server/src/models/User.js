@@ -14,11 +14,21 @@ const userSchema = new mongoose.Schema(
     permissions: [{ type: String, trim: true }],
     employeeNumber: { type: String, trim: true },
     phone: { type: String, trim: true },
+    email: { type: String, lowercase: true, trim: true },
     jobTitle: { type: String, trim: true },
     department: { type: String, trim: true },
     basicSalary: { type: Number, default: 0, min: 0 },
     lastLoginAt: { type: Date },
     active: { type: Boolean, default: true },
+    requiresPasswordReset: { type: Boolean, default: false },
+    legacySource: {
+      system: String,
+      id: String,
+      importedAt: Date,
+      group: String,
+      biller: String,
+      warehouse: String,
+    },
   },
   { timestamps: true }
 );

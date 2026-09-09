@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import { connectDB, disconnectDB } from '../config/db.js';
 import DemoBatch from '../models/DemoBatch.js';
 import Branch from '../models/Branch.js';
@@ -26,10 +28,12 @@ import MigrationRun from '../models/MigrationRun.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const dataPath = path.resolve(currentDir, '../../data/admabs-legacy-inventory-by-warehouse.json');
+const staffDataPath = path.resolve(currentDir, '../../data/admabs-legacy-staff.json');
 const apply = process.argv.includes('--apply');
 const models = { JournalEntry, FuelDip, FuelShift, FuelDelivery, FuelPump, FuelTank, CashReconciliation, Sale, PurchaseOrder, Expense, Approval, Product, Customer, Supplier, User, Outlet, Branch };
 const legacySystem = 'shop.admabsgh.com';
-const migrationKey = 'legacy-inventory-2026-09-08';
+const migrationKey = 'legacy-inventory-and-staff-2026-09-09';
+const staffMigrationKey = 'legacy-staff-2026-09-09';
 
 const number = value => Number(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
 const codeFor = (name, id) => `${name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 18)}-${id}`.toUpperCase();
@@ -43,6 +47,73 @@ const categoryFor = product => {
   return 'Service';
 };
 const divisionFor = name => /warehouse|container/i.test(name) ? 'warehouse' : 'tyres';
+const normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const roleFor = group => ({ owner: 'ceo', accountant: 'accountant', manager: 'branch', admin: 'branch', sales: 'staff' }[normalize(group)] || 'staff');
+
+async function migrateStaff(locationMap, importedAt) {
+  const source = JSON.parse(await fs.readFile(staffDataPath, 'utf8'));
+  const prior = await MigrationRun.findOne({ key: staffMigrationKey, status: 'completed' }).lean();
+  if (prior && !process.argv.includes('--force')) return { skipped: true, previous: prior.summary };
+  await MigrationRun.findOneAndUpdate(
+    { key: staffMigrationKey },
+    { $set: { source: legacySystem, sourceExportedAt: source.exportedAt, status: 'running', error: null } },
+    { upsert: true }
+  );
+
+  // Legacy passwords are deliberately not copied. Imported accounts require an
+  // administrator-issued reset before they can be used in the new application.
+  const placeholderHash = await bcrypt.hash(`legacy-disabled-${Date.now()}-${randomUUID()}`, 10);
+  const locations = [...locationMap.values()];
+  const usedUsernames = new Set((await User.find().select('username').lean()).map(user => user.username));
+  const operations = source.staff.map(record => {
+    const [firstName, lastName, email, company, awardPoints, group, status] = record.table.slice(1, 8);
+    const labels = record.selectedLabels || [];
+    const biller = labels[3] || '';
+    const warehouse = labels[4] === 'Select Warehouse' ? '' : labels[4] || '';
+    const locationText = normalize(`${biller} ${warehouse}`);
+    const location = locations.find(item => {
+      const name = normalize(item.branch.name);
+      return name && (locationText.includes(name) || name.includes(locationText));
+    });
+    let username = normalize(email).replace(/\s+/g, '.') || normalize(`${firstName}.${lastName}`).replace(/\s+/g, '.');
+    if (!username) username = `legacy.staff.${record.legacyId}`;
+    const base = username;
+    let suffix = 1;
+    while (usedUsernames.has(username)) username = `${base}.${suffix++}`;
+    usedUsernames.add(username);
+    const canEdit = record.fields?.edit_right === '1';
+    const canDiscount = record.fields?.allow_discount === '1';
+    const ownRecords = record.fields?.view_right === '0';
+    const permissions = [
+      ownRecords ? 'records.own' : 'records.branch',
+      canEdit && 'records.edit',
+      canDiscount && 'sales.discount',
+      roleFor(group) === 'staff' && 'reports.shift',
+    ].filter(Boolean);
+    return { updateOne: {
+      filter: { 'legacySource.system': legacySystem, 'legacySource.id': String(record.legacyId) },
+      update: { $set: {
+        name: `${firstName || ''} ${lastName || ''}`.trim() || `Legacy Staff ${record.legacyId}`,
+        username, email: String(email || '').trim() || undefined, passwordHash: placeholderHash,
+        role: roleFor(group), branch: location?.branch?._id, branches: location ? [location.branch._id] : [],
+        outlets: location ? [location.outlet._id] : [], permissions,
+        employeeNumber: `LEGACY-${record.legacyId}`, phone: record.fields?.phone || undefined,
+        jobTitle: group || 'Staff', department: roleFor(group) === 'accountant' ? 'Finance' : 'Operations',
+        active: normalize(status) === 'active', requiresPasswordReset: true,
+        legacySource: { system: legacySystem, id: String(record.legacyId), importedAt, group, biller, warehouse },
+      } }, upsert: true,
+    } };
+  });
+  if (operations.length) await User.bulkWrite(operations, { ordered: false });
+  const staffSummary = {
+    records: operations.length,
+    active: source.staff.filter(record => normalize(record.table[7]) === 'active').length,
+    inactive: source.staff.filter(record => normalize(record.table[7]) !== 'active').length,
+    requiresPasswordReset: operations.length,
+  };
+  await MigrationRun.findOneAndUpdate({ key: staffMigrationKey }, { $set: { status: 'completed', summary: staffSummary } });
+  return staffSummary;
+}
 
 async function backupCollections() {
   const backup = { createdAt: new Date().toISOString(), reason: 'Before legacy ADMABS inventory migration', collections: {} };
@@ -165,6 +236,7 @@ async function migrate() {
     const updated = rows.filter(product => existingKeys.has(`${product.warehouseId}|${product.legacyId}`)).length;
     const created = rows.length - updated;
     summary.imported = { branches: locationMap.size, outlets: locationMap.size, productsCreated: created, productsUpdated: updated };
+    summary.staff = await migrateStaff(locationMap, importedAt);
     await MigrationRun.findOneAndUpdate({ key: migrationKey }, { $set: { status: 'completed', summary } });
     return summary;
   } catch (error) {
