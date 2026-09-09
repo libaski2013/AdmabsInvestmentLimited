@@ -146,6 +146,11 @@ const Tabs = ({ tabs, active, onChange }) => (
 
 const fmt = n => `GH₵ ${Number(n || 0).toLocaleString('en-GH', { maximumFractionDigits: 2 })}`;
 const initialsOf = name => (name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+function ReceiptQr({reference,size=82}) {
+  const [src,setSrc]=useState('');
+  useEffect(()=>{if(!reference)return;import('qrcode').then(({default:QRCode})=>QRCode.toDataURL(`${window.location.origin}/api/verify/receipt/${encodeURIComponent(reference)}`,{width:size*3,margin:1,errorCorrectionLevel:'M'})).then(setSrc).catch(()=>{})},[reference,size]);
+  return src?<div className="text-center mt-3"><img src={src} alt={`Verify receipt ${reference}`} width={size} height={size} className="mx-auto"/><p className="text-gray-500" style={{fontSize:8}}>Scan to verify this unique ADMABS receipt</p></div>:null;
+}
 
 // ─── LOGIN ───
 function LoginScreen({ onLogin }) {
@@ -338,6 +343,7 @@ function PosPanel({ title, color, categoryFilter, categories, user, shiftControl
               <div className="flex justify-between font-black"><span>TOTAL</span><span>{fmt(r.total)}</span></div>
             </div>
             {(site.phone || site.email || site.address) && <div className="text-center text-gray-500 pt-2 mt-2 border-t border-dashed"><p>{site.address}</p><p>{[site.phone, site.email].filter(Boolean).join(' · ')}</p></div>}
+            <ReceiptQr reference={r.invoiceNumber}/>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={printReceipt} className="flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-600"><Printer size={13} /> Print</button>

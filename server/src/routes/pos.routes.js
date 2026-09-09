@@ -3,12 +3,22 @@ import Product from '../models/Product.js';
 import JournalEntry from '../models/JournalEntry.js';
 import Outlet from '../models/Outlet.js';
 import Customer from '../models/Customer.js';
+import CustomerPayment from '../models/CustomerPayment.js';
 
 async function nextInvoiceNumber() {
   return `INV-${Date.now()}-${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
 }
 
 export default async function posRoutes(fastify) {
+  fastify.get('/api/verify/receipt/:reference', async (request, reply) => {
+    const reference=String(request.params.reference||'').trim();
+    const sale=await Sale.findOne({invoiceNumber:reference}).select('invoiceNumber total status createdAt postedAt paymentMethod branch outlet').populate('branch','name code city').populate('outlet','name code division').lean();
+    if(sale)return {verified:true,type:'sale',reference:sale.invoiceNumber,amount:sale.total,status:sale.status,date:sale.postedAt||sale.createdAt,branch:sale.branch,outlet:sale.outlet,paymentMethod:sale.paymentMethod};
+    const payment=await CustomerPayment.findOne({receiptNumber:reference}).select('receiptNumber amount status receivedAt method branch outlet').populate('branch','name code city').populate('outlet','name code division').lean();
+    if(payment)return {verified:true,type:'customer_payment',reference:payment.receiptNumber,amount:payment.amount,status:payment.status,date:payment.receivedAt,branch:payment.branch,outlet:payment.outlet,paymentMethod:payment.method};
+    return reply.code(404).send({verified:false,error:'ADMABS receipt not found'});
+  });
+
   fastify.get('/api/sales', { preHandler: [fastify.authenticate] }, async (request) => {
     const { limit } = request.query || {};
     return Sale.find(fastify.scopeFilter(request))

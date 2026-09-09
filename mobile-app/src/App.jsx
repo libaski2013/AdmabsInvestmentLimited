@@ -14,6 +14,14 @@ import { api, setToken } from "./api.js";
 const money = (n) =>
   `GH₵ ${Number(n || 0).toLocaleString("en-GH", { maximumFractionDigits: 2 })}`;
 const initials = (name) => (name || "U").split(" ").filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+function ReceiptQr({ reference }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    if (!reference) return;
+    import("qrcode").then(({ default: QRCode }) => QRCode.toDataURL(`https://admabsinvestmentlimited-production.up.railway.app/api/verify/receipt/${encodeURIComponent(reference)}`, { width: 280, margin: 1, errorCorrectionLevel: "M" })).then(setSrc).catch(() => {});
+  }, [reference]);
+  return src ? <div className="center"><img src={src} alt={`Verify receipt ${reference}`} style={{ width: 112, height: 112, background: "white", padding: 4, borderRadius: 8 }} /><p className="muted">Scan to verify this unique ADMABS receipt</p></div> : null;
+}
 const CONFIG = {
   super_admin: {
     label: "Super Administrator",
@@ -596,6 +604,7 @@ function POS({ user, market = false }) {
             <p>{done.invoiceNumber}</p>
             <h1>{money(done.total)}</h1>
             <p>{new Date(done.createdAt || Date.now()).toLocaleString()}</p>
+            <ReceiptQr reference={done.invoiceNumber} />
             <p className="muted">
               Receipt uses the company logo and central transaction record.
             </p>
