@@ -55,7 +55,11 @@ export default async function userRoutes(fastify) {
   });
 
   fastify.patch('/api/users/:id', { preHandler: [fastify.authenticate, fastify.requireRole('super_admin')] }, async (request, reply) => {
-    const { password, ...updates } = request.body || {};
+    const { password } = request.body || {};
+    const editable = ['name','username','role','employeeNumber','phone','jobTitle','department','branch','branches','outlets','permissions','active','avatarUrl'];
+    const updates = Object.fromEntries(editable.filter(key => key in (request.body || {})).map(key => [key, request.body[key]]));
+    if (updates.username) updates.username=String(updates.username).toLowerCase().trim();
+    if (updates.permissions) updates.permissions=[...new Set(updates.permissions)].filter(permission=>PERMISSIONS.includes(permission));
     const target = await User.findById(request.params.id);
     if (!target) return reply.code(404).send({ error: 'Staff account not found' });
     if (target.role === 'super_admin' && String(target._id) !== request.user.id) return reply.code(403).send({ error: 'Another Super Admin account cannot be changed' });

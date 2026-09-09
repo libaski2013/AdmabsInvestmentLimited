@@ -172,7 +172,4 @@ export const api = {
   startWorkShift: body => request('/work-shifts/start', { method: 'POST', body }),
   closeWorkShift: (id, body) => request(`/work-shifts/${id}/close`, { method: 'PATCH', body }),
   reviewWorkShift: (id, body) => request(`/work-shifts/${id}/review`, { method: 'PATCH', body }),
-  demoBatches: () => request('/demo/batches'),
-  seedDemoData: body => request('/demo/seed', { method: 'POST', body }),
-  deleteDemoBatch: id => request(`/demo/batches/${id}`, { method: 'DELETE' }),
 };
