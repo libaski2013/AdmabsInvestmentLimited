@@ -31,10 +31,12 @@ import performanceRoutes from './routes/performance.routes.js';
 import workforceRoutes from './routes/workforce.routes.js';
 import taxRoutes from './routes/tax.routes.js';
 import MigrationRun from './models/MigrationRun.js';
+import prepareLiveSystem from './utils/prepare-live-system.js';
 
 const fastify = Fastify({ logger: true, bodyLimit: 25 * 1024 * 1024 });
 
 await connectDB(fastify.log);
+await prepareLiveSystem(fastify.log);
 
 const configuredOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(value => value.trim()).filter(Boolean)
@@ -74,7 +76,16 @@ await fastify.register(taxRoutes);
 
 fastify.get('/api/health', async () => {
   const migration = await MigrationRun.findOne({ key: 'legacy-transactions-2026-09-09-v1' }).select('status error').lean();
-  return { ok: true, release: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local', legacyTransactions: migration?.status || 'pending', ...(migration?.status === 'failed' ? { migrationError: String(migration.error || 'Unknown migration error').slice(0, 300) } : {}) };
+  const livePreparation = await MigrationRun.findOne({ key: 'prepare-live-system-2026-09-09-v1' }).select('status error summary').lean();
+  return {
+    ok: true,
+    release: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) || 'local',
+    legacyTransactions: migration?.status || 'pending',
+    livePreparation: livePreparation?.status || 'pending',
+    ...(livePreparation?.summary ? { liveLocations: livePreparation.summary } : {}),
+    ...(migration?.status === 'failed' ? { migrationError: String(migration.error || 'Unknown migration error').slice(0, 300) } : {}),
+    ...(livePreparation?.status === 'failed' ? { livePreparationError: String(livePreparation.error || 'Unknown live preparation error').slice(0, 300) } : {}),
+  };
 });
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(currentDir, '../../dist');
