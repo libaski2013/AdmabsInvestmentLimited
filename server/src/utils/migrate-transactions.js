@@ -232,7 +232,7 @@ async function migrate() {
     const returnOps = returns.map(row => {
       const date = parseDate(row.Date) || importedAt; const location = findLocation(row.Biller, locations, fallback); const total = -Math.abs(amount(row['Grand Total'])); const customer = customers.get(normalize(row.Customer || 'Walk-in Customer'));
       return { updateOne: { filter: { 'legacySource.system': legacySystem, 'legacySource.rowKey': `return:${row._index}` }, update: { $set: {
-        invoiceNumber: row._occurrence === 1 ? row._reference : `${row._reference}-DUP-${row._occurrence}`, branch: location?.branch?._id, outlet: location?.outlet?._id, customer: customer?._id,
+        invoiceNumber: `RET-${row._reference}${row._occurrence === 1 ? '' : `-DUP-${row._occurrence}`}`, branch: location?.branch?._id, outlet: location?.outlet?._id, customer: customer?._id,
         items: [{ name: 'Legacy sales return', category: 'Tyre', price: Math.abs(total), cost: 0, qty: -1 }], subtotal: total, tax: 0, total, payments: [], paymentMethod: 'Legacy Return', discount: 0, taxRate: 0, channel: 'pos', status: 'posted', dailyApprovalStatus: 'approved', postedAt: date,
         notes: 'Imported legacy return', legacySource: { system: legacySystem, rowKey: `return:${row._index}`, reference: row._reference, biller: row.Biller, paymentStatus: 'Returned', importedAt, itemPricing: 'return_total' }, createdAt: date, updatedAt: date,
       } }, upsert: true, timestamps: false } };
