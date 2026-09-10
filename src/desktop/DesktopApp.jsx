@@ -705,7 +705,7 @@ function CustView({ user }) {
   const customerLocation = sel?.location || [sel?.outlet?.name, sel?.branch?.name].filter(Boolean).join(', ') || 'Not provided';
   useEffect(()=>{if(!statement){setStatementActionsHost(null);return}const printButton=[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Print'&&button.closest('.lg\\:col-span-3'));setStatementActionsHost(printButton?.parentElement||null)},[statement,selId]);
   const creditOut = customers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
-  const visibleCustomers=customers.filter(c=>matchesSearch(customerSearch,c.name,c.phone,c.email,c.type,c.branch?.name,c.outlet?.name));
+  const visibleCustomers=customers.filter(c=>matchesSearch(customerSearch,c.name,c.phone,c.email,c.location,c.type,c.branch?.name,c.outlet?.name));
   const printArea=kind=>{document.body.classList.add(`printing-${kind}`);window.print();setTimeout(()=>document.body.classList.remove(`printing-${kind}`),250)};
   const shareStatement=async(mode='share')=>{
     if(!statement||!sel)return;
