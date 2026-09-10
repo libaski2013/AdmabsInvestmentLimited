@@ -4,6 +4,7 @@ import DataAudit from '../models/DataAudit.js';
 
 const COLLECTIONS=['users','branches','outlets','products','sales','customers','customerpayments','priceadjustments','suppliers','purchaseorders','expenses','approvals','journalentries','fueltanks','fuelpumps','fuelshifts','fueldips','fueldeliveries','sitecontents','cashreconciliations','stockmovements','demobatches','payrollruns','smscampaigns','employeerewards'];
 const backupGuard=fastify=>[fastify.authenticate,fastify.requirePermission('data.manage','ceo')];
+const currencyGuard=fastify=>[fastify.authenticate,fastify.requirePermission('tools.currency.use','ceo')];
 let rateCache={key:'',value:null,expires:0};
 
 async function snapshot(){
@@ -19,7 +20,7 @@ async function applyBackup(data,mode){
 }
 
 export default async function toolsRoutes(fastify){
-  fastify.get('/api/tools/currency',{preHandler:[fastify.authenticate,fastify.requireRole('ceo')]},async(request,reply)=>{
+  fastify.get('/api/tools/currency',{preHandler:currencyGuard(fastify)},async(request,reply)=>{
     const from=String(request.query?.from||'USD').toUpperCase(),to=String(request.query?.to||'GHS').toUpperCase(),amount=Number(request.query?.amount||1);if(!/^[A-Z]{3}$/.test(from)||!/^[A-Z]{3}$/.test(to)||!Number.isFinite(amount))return reply.code(400).send({error:'Valid currencies and amount are required'});if(from===to)return {from,to,amount,rate:1,result:amount,date:new Date().toISOString().slice(0,10),source:'Identity'};
     const key=`${from}:${to}`;try{if(rateCache.key!==key||Date.now()>rateCache.expires){const response=await fetch(`https://api.frankfurter.dev/v2/rates?base=${from}&quotes=${to}`,{signal:AbortSignal.timeout(8000)});if(!response.ok)throw new Error('Rate provider unavailable');const rows=await response.json(),item=Array.isArray(rows)?rows.find(x=>x.quote===to):null;if(!item?.rate)throw new Error('Currency pair unavailable');rateCache={key,value:item,expires:Date.now()+15*60*1000};}return {from,to,amount,rate:rateCache.value.rate,result:amount*rateCache.value.rate,date:rateCache.value.date,source:'Frankfurter central-bank rates'};}catch(error){return reply.code(502).send({error:error.message});}
   });
