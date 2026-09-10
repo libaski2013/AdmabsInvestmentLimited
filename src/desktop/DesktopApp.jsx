@@ -773,7 +773,7 @@ function CustView({ user }) {
               <div className="bg-blue-900 rounded-xl p-5 text-white">
                 <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="font-black text-lg">{sel.name}</h3><p className="text-sm opacity-70">{sel.type} · {sel.visits} visits</p></div><div className="flex gap-2">{Number(sel.balance)>0&&<button onClick={()=>setPayment({amount:sel.balance,method:'Cash',reference:'',notes:''})} className="text-xs font-black bg-red-600 px-3 py-2 rounded-lg">Receive Payment</button>}<button onClick={()=>{setModal(sel);setForm(sel);}} className="text-xs font-bold bg-white/10 px-3 py-2 rounded-lg">Edit</button></div></div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[['Phone', sel.phone || '—'], ['Balance', fmt(sel.balance)], ['Loyalty Points', String(sel.loyaltyPoints || 0)], ['Last Visit', sel.lastVisit ? new Date(sel.lastVisit).toLocaleDateString() : '—']].map(([k, v], i) => (
+                  {[['Phone', sel.phone || '—'], ['Total Balance Due', fmt(sel.balance)], ['Loyalty Points', String(sel.loyaltyPoints || 0)], ['Last Visit', sel.lastVisit ? new Date(sel.lastVisit).toLocaleDateString() : '—']].map(([k, v], i) => (
                     <div key={i} className="bg-white bg-opacity-10 rounded-xl p-2.5"><p className="opacity-60 mb-0.5">{k}</p><p className="font-bold">{v}</p></div>
                   ))}
                 </div>
