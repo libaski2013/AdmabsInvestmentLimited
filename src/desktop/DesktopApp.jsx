@@ -704,7 +704,7 @@ function CustView({ user }) {
   const sel = customers.find(c => c._id === selId);
   useEffect(()=>{if(!statement){setStatementActionsHost(null);return}const printButton=[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Print'&&button.closest('.lg\\:col-span-3'));setStatementActionsHost(printButton?.parentElement||null)},[statement,selId]);
   const creditOut = customers.reduce((s, c) => s + (c.balance > 0 ? c.balance : 0), 0);
-  const visibleCustomers=customers.filter(c=>!customerSearch||[c.name,c.phone,c.email,c.type,c.branch?.name,c.outlet?.name].some(value=>String(value||'').toLowerCase().includes(customerSearch.toLowerCase())));
+  const visibleCustomers=customers.filter(c=>matchesSearch(customerSearch,c.name,c.phone,c.email,c.type,c.branch?.name,c.outlet?.name));
   const printArea=kind=>{document.body.classList.add(`printing-${kind}`);window.print();setTimeout(()=>document.body.classList.remove(`printing-${kind}`),250)};
   const shareStatement=async(mode='share')=>{
     if(!statement||!sel)return;
