@@ -7,6 +7,24 @@ const SUPERMARKET_CATEGORIES = ['Grocery', 'Beverages', 'Snacks', 'Household', '
 const TYRE_CATEGORIES = ['Tyre', 'Rim', 'Battery', 'Lubricant', 'Service'];
 const PRICE_CATEGORIES = ['Tyre', 'Rim', 'Battery', 'Lubricant'];
 const money = value => Math.round(Number(value || 0) * 100) / 100;
+const normalizeSearch = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const digitsOnly = value => String(value ?? '').replace(/\D/g, '');
+const productMatchesSearch = (product, query) => {
+  const values = [
+    product.name, product.code, product.barcode, product.qrCode,
+    product.attributes?.brand, product.attributes?.model, product.attributes?.tyreSize,
+    product.attributes?.width, product.attributes?.profile, product.attributes?.rimSize,
+    product.attributes?.loadIndex, product.attributes?.speedRating,
+  ];
+  const normalizedValues = values.map(normalizeSearch).filter(Boolean);
+  const digitValues = values.map(digitsOnly).filter(Boolean);
+  return String(query).trim().split(/\s+/).filter(Boolean).every(token => {
+    const normalizedToken = normalizeSearch(token);
+    const digitToken = digitsOnly(token);
+    return normalizedValues.some(value => value.includes(normalizedToken))
+      || (digitToken.length >= 3 && digitValues.some(value => value.includes(digitToken)));
+  });
+};
 const adjustedPrice = (price, mode, value, rounding) => {
   const raw = mode === 'percentage' ? price * (1 + value / 100) : mode === 'fixed' ? price + value : value;
   const step = Number(rounding) || 0.01;
@@ -38,8 +56,8 @@ export default async function inventoryRoutes(fastify) {
     if (category) filter.category = category;
     if (branch) filter.branch = branch;
     if (outlet) filter.outlet = outlet;
-    if (q) filter.$or = [{ name: new RegExp(q, 'i') }, { code: new RegExp(q, 'i') }, { barcode: new RegExp(q, 'i') }, { qrCode: new RegExp(q, 'i') }, { 'attributes.brand': new RegExp(q, 'i') }];
     let products = await Product.find(filter).populate('branch', 'name code').populate('outlet', 'name code division').sort({ name: 1 }).lean();
+    if (q) products = products.filter(product => productMatchesSearch(product, q));
     if (low === 'true') products = products.filter((p) => p.qty <= p.reorderLevel);
     return products;
   });
