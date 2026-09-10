@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import CorporateWebsite from './desktop/CorporateWebsite.jsx';
@@ -6,13 +6,18 @@ import CorporateWebsite from './desktop/CorporateWebsite.jsx';
 const BREAKPOINT = 880;
 
 function Root() {
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= BREAKPOINT);
-  useEffect(() => {
-    const onResize = () => setIsDesktop(window.innerWidth >= BREAKPOINT);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  // Choose the interface once when the app opens. Resizing or minimizing a
+  // desktop window must not replace the user's current desktop session.
+  const isDesktop = React.useMemo(() => window.innerWidth >= BREAKPOINT, []);
   return isDesktop ? <CorporateWebsite /> : <App />;
+}
+
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // The application remains fully usable online if registration is blocked.
+    });
+  });
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
