@@ -7,7 +7,7 @@ export const PERMISSIONS = [
   'procurement.manage', 'expenses.manage', 'accounting.journal.create', 'reports.view',
   'reconciliation.create', 'reconciliation.review', 'website.manage', 'staff.view',
   'staff.manage', 'branches.manage', 'system.settings.manage', 'inventory.search_all',
-  'payroll.manage', 'sms.manage', 'data.manage', 'performance.manage',
+  'payroll.manage', 'sms.manage', 'data.manage', 'tools.currency.use', 'performance.manage',
   'shifts.manage', 'attendance.view', 'customers.payment.receive', 'inventory.price.adjust',
   'tax.manage',
 ];
