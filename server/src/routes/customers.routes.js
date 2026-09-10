@@ -72,7 +72,7 @@ export default async function customerRoutes(fastify) {
     return reply.code(201).send({ payment, balance: updated.balance });
   });
 
-  fastify.post('/api/customers', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/api/customers', { preHandler: [fastify.authenticate, fastify.requirePermission('customers.manage', 'ceo', 'gm', 'finance', 'accountant', 'branch', 'sub_manager')] }, async (request, reply) => {
     const body = { ...request.body };
     if (!['super_admin', 'ceo', 'gm'].includes(request.user.role)) { body.branch = request.user.branchIds?.[0]; body.outlet = request.user.outletIds?.[0]; }
     const customer = await Customer.create(body); return reply.code(201).send(customer);
