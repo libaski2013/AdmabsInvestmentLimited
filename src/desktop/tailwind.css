@@ -18,6 +18,20 @@
 .admabs-interactive nav a:hover::after { right:0; }
 .admabs-tooltip { animation: admabsTipIn 160ms ease-out both; }
 .admabs-welcome { animation: admabsWelcomeIn 520ms cubic-bezier(.2,.8,.2,1) both, admabsWelcomeGlow 2.4s ease-in-out infinite alternate; }
+
+/* KPI cards: each dashboard/overview card inherits a distinct branded colour from its icon/accent class. */
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-blue-900) { background: linear-gradient(135deg,#172554,#1e3a8a) !important; border-color:#1e40af !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-blue-700) { background: linear-gradient(135deg,#1d4ed8,#2563eb) !important; border-color:#2563eb !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-blue-600) { background: linear-gradient(135deg,#2563eb,#60a5fa) !important; border-color:#3b82f6 !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-red-600) { background: linear-gradient(135deg,#991b1b,#dc2626) !important; border-color:#dc2626 !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-green-600), .admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-green-700) { background: linear-gradient(135deg,#166534,#16a34a) !important; border-color:#16a34a !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-yellow-500) { background: linear-gradient(135deg,#a16207,#eab308) !important; border-color:#eab308 !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-slate-700) { background: linear-gradient(135deg,#334155,#475569) !important; border-color:#475569 !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> .bg-purple-700) { background: linear-gradient(135deg,#6b21a8,#7e22ce) !important; border-color:#7e22ce !important; color:#fff; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> span + div) p { color:rgba(255,255,255,.78) !important; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> span + div) p.font-black { color:#fff !important; }
+.admabs-app .group.relative.overflow-hidden.bg-white:has(> span + div):hover { transform:translateY(-5px) scale(1.035); box-shadow:0 18px 38px rgba(15,23,42,.28); }
+
 @keyframes admabsTipIn { from { opacity:0; transform:translateY(4px) scale(.97) } to { opacity:1; transform:none } }
 @keyframes admabsWelcomeIn { from { opacity:0; transform:translateX(42px) scale(.96) } to { opacity:1; transform:none } }
 @keyframes admabsWelcomeGlow { from { box-shadow:0 18px 45px rgba(15,45,110,.22) } to { box-shadow:0 20px 55px rgba(37,99,235,.42) } }
