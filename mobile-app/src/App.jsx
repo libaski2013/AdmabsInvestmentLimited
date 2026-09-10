@@ -13,6 +13,14 @@ import {
 import { api, setToken } from "./api.js";
 const money = (n) =>
   `GH₵ ${Number(n || 0).toLocaleString("en-GH", { maximumFractionDigits: 2 })}`;
+const compactSearch = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const digitsOnlySearch = (value) => String(value ?? "").replace(/\D/g, "");
+const matchesSearch = (query, ...values) => String(query || "").trim().split(/\s+/).filter(Boolean).every((token) => {
+  const compactToken = compactSearch(token);
+  const digitToken = digitsOnlySearch(token);
+  return values.some((value) => compactSearch(value).includes(compactToken))
+    || (digitToken.length >= 3 && values.some((value) => digitsOnlySearch(value).includes(digitToken)));
+});
 const initials = (name) => (name || "U").split(" ").filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 const savedMobileUser = () => { try { return JSON.parse(localStorage.getItem("admabs_mobile_user") || "null"); } catch { return null; } };
 function ReceiptQr({ reference }) {
@@ -511,12 +519,8 @@ function POS({ user, market = false }) {
     load();
     api.siteContent().then(setSite).catch(() => {});
   }, []);
-  const shown = products.filter(
-    (p) =>
-      !search ||
-      `${p.name} ${p.code} ${p.barcode || ""}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+  const shown = products.filter((p) =>
+    matchesSearch(search, p.name, p.code, p.barcode, p.qrCode, p.attributes?.brand, p.attributes?.model, p.attributes?.tyreSize, p.attributes?.loadIndex, p.attributes?.speedRating)
   );
   const total = cart.reduce((s, x) => s + x.price * x.qty, 0) * 1.15;
   const add = (p) =>
@@ -552,7 +556,7 @@ function POS({ user, market = false }) {
       <h2>{market ? "Supermarket POS" : "Tyres, Rims & Batteries POS"}</h2>
       <input
         className="field"
-        placeholder="Search name, barcode or code"
+        placeholder="Search tyre number, model, barcode or code"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
@@ -836,21 +840,19 @@ function Inventory({ user }) {
       .then(setList)
       .catch((e) => setErr(e.message));
   useEffect(() => {
-    load();
-  }, []);
+    const timer = setTimeout(load, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
   return (
     <>
       <div className="row between"><h2>Outlet Inventory</h2>{(["super_admin","ceo","gm"].includes(user?.role) || user?.permissions?.includes("inventory.price.adjust")) && <button className="btn red" onClick={() => { setAdjust({ categories:["Tyre","Rim","Battery"], mode:"percentage", value:"", rounding:"0.01", reason:"" }); setPricePreview(null); }}>Adjust Prices</button>}</div>
       <div className="row">
         <input
           className="field"
-          placeholder="Search products across permitted outlets"
+          placeholder="Search tyre number, model or code — updates as you type"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button className="btn" onClick={load}>
-          Find
-        </button>
       </div>
       {err && <p className="error">{err}</p>}
       <div className="card">
@@ -946,7 +948,7 @@ function SimpleRecords({ type }) {
       {err && <p className="error">{err}</p>}
       {customers && <input className="field" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, email or location" />}
       <div className="card">
-        {list.filter((x) => !customers || !search || [x.name,x.phone,x.email,x.branch?.name,x.outlet?.name].some((value) => String(value || "").toLowerCase().includes(search.toLowerCase()))).map((x) => (
+        {list.filter((x) => !customers || !search || matchesSearch(search,x.name,x.phone,x.email,x.branch?.name,x.outlet?.name)).map((x) => (
           <div className="item row between" key={x._id} onClick={() => customers && api.customerStatement(x._id).then((s) => { setSelected(x); setStatement(s); }).catch((e) => setErr(e.message))}>
             <div>
               <p>
