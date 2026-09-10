@@ -147,6 +147,15 @@ const Tabs = ({ tabs, active, onChange }) => (
 );
 
 const fmt = n => `GH₵ ${Number(n || 0).toLocaleString('en-GH', { maximumFractionDigits: 2 })}`;
+const compactSearch = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const digitsOnlySearch = value => String(value ?? '').replace(/\D/g, '');
+const matchesSearch = (query, ...values) => String(query || '').trim().split(/\s+/).filter(Boolean).every(token => {
+  const compactToken = compactSearch(token);
+  const digitToken = digitsOnlySearch(token);
+  return values.some(value => compactSearch(value).includes(compactToken))
+    || (digitToken.length >= 3 && values.some(value => digitsOnlySearch(value).includes(digitToken)));
+});
+
 const initialsOf = name => (name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 const savedDesktopUser=()=>{try{return JSON.parse(localStorage.getItem('admabs_session_user')||'null')}catch{return null}};
 function GlobalHelpTooltip() {
@@ -282,7 +291,7 @@ function usePos(categoryFilter) {
   const [done, setDone] = useState(null);
 
   useEffect(() => {
-    api.products().then(list => setCatalog(list.filter(categoryFilter).map(p => ({ id: p._id, n: p.name, price: p.price, cat: p.category, icon: p.icon, code: p.code, barcode: p.barcode, qrCode: p.qrCode, available: p.qty }))))
+    api.products().then(list => setCatalog(list.filter(categoryFilter).map(p => ({ id: p._id, n: p.name, price: p.price, cat: p.category, icon: p.icon, code: p.code, barcode: p.barcode, qrCode: p.qrCode, available: p.qty, searchValues: [p.name,p.code,p.barcode,p.qrCode,p.attributes?.brand,p.attributes?.model,p.attributes?.tyreSize,p.attributes?.width,p.attributes?.profile,p.attributes?.rimSize,p.attributes?.loadIndex,p.attributes?.speedRating] }))))
       .catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -328,7 +337,7 @@ function PosPanel({ title, color, categoryFilter, categories, user, shiftControl
   useEffect(()=>{if(!allowsNight)setWorkShift('day')},[allowsNight]);
   const [scanner,setScanner]=useState(false); const [scanError,setScanError]=useState('');
   useEffect(() => { api.siteContent().then(setSite).catch(() => {}); }, []);
-  const filtered = pos.catalog.filter(p => (cat === 'All' || p.cat === cat) && (!search || p.n.toLowerCase().includes(search.toLowerCase())));
+  const filtered = pos.catalog.filter(p => (cat === 'All' || p.cat === cat) && matchesSearch(search, ...(p.searchValues || [p.n,p.code,p.barcode,p.qrCode])));
   const printReceipt = () => { document.body.classList.add('printing-receipt'); window.print(); setTimeout(() => document.body.classList.remove('printing-receipt'), 250); };
 
   if (pos.done) {
@@ -454,7 +463,12 @@ function InvView({ user }) {
   const [priceAdjust,setPriceAdjust]=useState(null); const [pricePreview,setPricePreview]=useState(null);
   const [selected,setSelected]=useState([]); const [deleting,setDeleting]=useState(false);
   const load = () => api.products({q:search,branch:branchFilter,outlet:outletFilter,allOutlets:searchAll?'true':''}).then(items=>{setProducts(items);setSelected([])}).catch(e => setErr(e.message)).finally(() => setLoading(false));
-  useEffect(() => { load(); Promise.all([api.branches(), api.outlets()]).then(([b,o]) => { setBranches(b); setOutlets(o); }).catch(() => {}); }, []);
+  useEffect(() => { Promise.all([api.branches(), api.outlets()]).then(([b,o]) => { setBranches(b); setOutlets(o); }).catch(() => {}); }, []);
+  useEffect(() => {
+    setLoading(true);
+    const timer = setTimeout(load, 250);
+    return () => clearTimeout(timer);
+  }, [search, branchFilter, outletFilter, searchAll]);
   const canEdit = ['super_admin','ceo','gm','branch','sub_manager','storekeeper'].includes(user?.role) || user?.permissions?.includes('inventory.update') || user?.permissions?.includes('inventory.create');
   const canSearchAll=['super_admin','ceo','gm'].includes(user?.role)||user?.permissions?.includes('inventory.search_all');
   const canAdjustPrices=['super_admin','ceo','gm'].includes(user?.role)||user?.permissions?.includes('inventory.price.adjust');
@@ -480,7 +494,7 @@ function InvView({ user }) {
         <Kpi label="Stock Value" val={fmt(stockValue)} Ic={DollarSign} bg="bg-blue-700" />
         <Kpi label="Categories" val={String(new Set(products.map(p => p.category)).size)} Ic={Store} bg="bg-blue-600" />
       </div>
-      <div className="bg-white border rounded-xl p-3 space-y-3"><Tabs tabs={[{id:'tyres',label:'Tyres, Rims & Batteries'},{id:'supermarket',label:'Supermarket Inventory'},{id:'services',label:'Services'}]} active={division} onChange={v=>{setDivision(v);setFilter('all')}}/><div className="grid md:grid-cols-5 gap-2"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={division==='services'?'Service name or code':'Tyre number, model, code or barcode (dashes optional)'} className="border rounded-xl px-3 py-2 text-xs"/><select value={branchFilter} onChange={e=>{setBranchFilter(e.target.value);setOutletFilter('')}} className="border rounded-xl px-3 py-2 text-xs bg-white"><option value="">All available branches</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={outletFilter} onChange={e=>setOutletFilter(e.target.value)} className="border rounded-xl px-3 py-2 text-xs bg-white"><option value="">All available outlets</option>{outlets.filter(o=>!branchFilter||(o.branch?._id||o.branch)===branchFilter).map(o=><option key={o._id} value={o._id}>{o.name}</option>)}</select>{canSearchAll?<label className="flex items-center gap-2 text-xs font-bold p-2"><input type="checkbox" checked={searchAll} onChange={e=>setSearchAll(e.target.checked)}/> Search across company</label>:<div/>}<button onClick={load} className="bg-blue-900 text-white rounded-xl text-xs font-black">{division==='services'?'Search services':'Search stock'}</button></div>{division!=='services'&&<Tabs tabs={[{ id: 'all', label: 'All Stock' }, { id: 'low', label: `Low Stock (${low.filter(p=>divisionCategories.includes(p.category)).length})` }]} active={filter} onChange={setFilter} />}</div>
+      <div className="bg-white border rounded-xl p-3 space-y-3"><Tabs tabs={[{id:'tyres',label:'Tyres, Rims & Batteries'},{id:'supermarket',label:'Supermarket Inventory'},{id:'services',label:'Services'}]} active={division} onChange={v=>{setDivision(v);setFilter('all')}}/><div className="grid md:grid-cols-4 gap-2"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={division==='services'?'Service name or code — filters as you type':'Tyre number, model, code or barcode — filters as you type'} className="border rounded-xl px-3 py-2 text-xs"/><select value={branchFilter} onChange={e=>{setBranchFilter(e.target.value);setOutletFilter('')}} className="border rounded-xl px-3 py-2 text-xs bg-white"><option value="">All available branches</option>{branches.map(b=><option key={b._id} value={b._id}>{b.name}</option>)}</select><select value={outletFilter} onChange={e=>setOutletFilter(e.target.value)} className="border rounded-xl px-3 py-2 text-xs bg-white"><option value="">All available outlets</option>{outlets.filter(o=>!branchFilter||(o.branch?._id||o.branch)===branchFilter).map(o=><option key={o._id} value={o._id}>{o.name}</option>)}</select>{canSearchAll?<label className="flex items-center gap-2 text-xs font-bold p-2"><input type="checkbox" checked={searchAll} onChange={e=>setSearchAll(e.target.checked)}/> Search across company</label>:<div className="flex items-center text-xs font-bold text-green-700">Live search enabled</div>}</div>{division!=='services'&&<Tabs tabs={[{ id: 'all', label: 'All Stock' }, { id: 'low', label: `Low Stock (${low.filter(p=>divisionCategories.includes(p.category)).length})` }]} active={filter} onChange={setFilter} />}</div>
       {canDelete&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3"><label className="flex items-center gap-2 text-xs font-bold text-blue-950"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible}/> Select all {visibleIds.length} visible items</label><div className="flex items-center gap-3"><span className="text-xs font-bold text-gray-500">{selected.length} selected</span><button disabled={!selected.length||deleting} onClick={deleteSelected} className="rounded-lg bg-red-600 px-4 py-2 text-xs font-black text-white disabled:opacity-40">{deleting?'Deleting…':'Delete selected'}</button></div></div>}
       {loading ? <p className="text-xs text-gray-400">Loading…</p> : (
         view==='list'?<div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
