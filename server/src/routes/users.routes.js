@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import '../models/Outlet.js';
 
 export const PERMISSIONS = [
-  'pos.sale.create', 'inventory.create', 'inventory.update', 'customers.manage',
+  'pos.sale.create', 'inventory.create', 'inventory.update', 'inventory.transfer', 'customers.manage',
   'procurement.manage', 'expenses.manage', 'accounting.journal.create', 'reports.view',
   'reconciliation.create', 'reconciliation.review', 'website.manage', 'staff.view',
   'staff.manage', 'branches.manage', 'system.settings.manage', 'inventory.search_all',
