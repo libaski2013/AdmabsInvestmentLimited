@@ -138,8 +138,8 @@ export default async function inventoryRoutes(fastify) {
         if (!updatedSource) throw Object.assign(new Error('Insufficient stock at the source outlet'), { statusCode: 409 });
 
         let destinationProduct = await Product.findOneAndUpdate(
-          { outlet: destination._id, code: source.code, active: true },
-          { $inc: { qty: quantity } },
+          { outlet: destination._id, code: source.code },
+          { $inc: { qty: quantity }, $set: { active: true } },
           { new: false, session }
         );
         let destinationBefore = destinationProduct?.qty || 0;
