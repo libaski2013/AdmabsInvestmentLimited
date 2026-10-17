@@ -2,6 +2,7 @@ import Product from '../models/Product.js';
 import StockMovement from '../models/StockMovement.js';
 import Outlet from '../models/Outlet.js';
 import PriceAdjustment from '../models/PriceAdjustment.js';
+import mongoose from 'mongoose';
 
 const SUPERMARKET_CATEGORIES = ['Grocery', 'Beverages', 'Snacks', 'Household', 'Bakery', 'Dairy'];
 const TYRE_CATEGORIES = ['Tyre', 'Rim', 'Battery', 'Lubricant', 'Service'];
@@ -67,6 +68,120 @@ export default async function inventoryRoutes(fastify) {
     const product = await Product.findOne({ active: true, ...fastify.scopeFilter(request), $or: [{ barcode: code }, { qrCode: code }, { code }] }).lean();
     if (!product) return reply.code(404).send({ error: 'No product matches this barcode or QR code in your assigned outlet' });
     return product;
+  });
+
+  fastify.get('/api/stock-transfers', { preHandler: [fastify.authenticate] }, async request => {
+    const outgoing = await StockMovement.find({ ...fastify.scopeFilter(request), type: 'transfer_out' })
+      .populate('product', 'code name category')
+      .populate('branch', 'name code')
+      .populate('outlet', 'name code')
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 }).limit(200).lean();
+    const incomingNumbers = outgoing.map(row => String(row.number).replace(/-OUT$/, '-IN'));
+    const incoming = await StockMovement.find({ number: { $in: incomingNumbers }, type: 'transfer_in' })
+      .populate('product', 'code name category')
+      .populate('branch', 'name code')
+      .populate('outlet', 'name code')
+      .lean();
+    const incomingByNumber = new Map(incoming.map(row => [row.number, row]));
+    return outgoing.map(row => {
+      const destination = incomingByNumber.get(String(row.number).replace(/-OUT$/, '-IN'));
+      return {
+        number: String(row.number).replace(/-OUT$/, ''),
+        createdAt: row.createdAt,
+        quantity: row.quantity,
+        reference: row.reference,
+        notes: row.notes,
+        product: row.product,
+        sourceBranch: row.branch,
+        sourceOutlet: row.outlet,
+        destinationBranch: destination?.branch,
+        destinationOutlet: destination?.outlet,
+        createdBy: row.createdBy,
+      };
+    });
+  });
+
+  fastify.post('/api/stock-transfers', {
+    preHandler: [fastify.authenticate, fastify.requirePermission('inventory.transfer', 'ceo', 'gm', 'branch', 'sub_manager', 'storekeeper')],
+  }, async (request, reply) => {
+    const { sourceProduct, destinationOutlet, reference, notes } = request.body || {};
+    const quantity = Number(request.body?.quantity);
+    if (!sourceProduct || !destinationOutlet) return reply.code(400).send({ error: 'Select a product and destination outlet' });
+    if (!Number.isInteger(quantity) || quantity <= 0) return reply.code(400).send({ error: 'Transfer quantity must be a whole number greater than zero' });
+
+    const source = await Product.findOne({ _id: sourceProduct, active: true, ...fastify.scopeFilter(request) }).lean();
+    if (!source) return reply.code(404).send({ error: 'Source product was not found in your assigned inventory' });
+    if (source.category === 'Service') return reply.code(400).send({ error: 'Services cannot be transferred as stock' });
+    if (String(source.outlet) === String(destinationOutlet)) return reply.code(400).send({ error: 'Choose a different destination outlet' });
+
+    const destination = await Outlet.findById(destinationOutlet).lean();
+    if (!destination) return reply.code(404).send({ error: 'Destination outlet not found' });
+    if (!['super_admin', 'ceo', 'gm'].includes(request.user.role)) {
+      if (request.user.outletIds?.length && !request.user.outletIds.includes(String(destination._id))) return reply.code(403).send({ error: 'You can only transfer stock to an assigned outlet' });
+      if (request.user.branchIds?.length && !request.user.branchIds.includes(String(destination.branch))) return reply.code(403).send({ error: 'You can only transfer stock within assigned branches' });
+    }
+    if (destination.division === 'supermarket' && !SUPERMARKET_CATEGORIES.includes(source.category)) return reply.code(400).send({ error: 'This product cannot be stored in a supermarket outlet' });
+    if (destination.division === 'tyres' && !TYRE_CATEGORIES.includes(source.category)) return reply.code(400).send({ error: 'This product cannot be stored in an automotive outlet' });
+    if (!['supermarket', 'tyres', 'warehouse'].includes(destination.division)) return reply.code(400).send({ error: 'The selected destination does not hold retail inventory' });
+
+    const transferNumber = `TRF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const session = await mongoose.startSession();
+    let destinationProductId;
+    try {
+      await session.withTransaction(async () => {
+        const updatedSource = await Product.findOneAndUpdate(
+          { _id: source._id, active: true, qty: { $gte: quantity } },
+          { $inc: { qty: -quantity } },
+          { new: false, session }
+        );
+        if (!updatedSource) throw Object.assign(new Error('Insufficient stock at the source outlet'), { statusCode: 409 });
+
+        let destinationProduct = await Product.findOneAndUpdate(
+          { outlet: destination._id, code: source.code, active: true },
+          { $inc: { qty: quantity } },
+          { new: false, session }
+        );
+        let destinationBefore = destinationProduct?.qty || 0;
+        if (!destinationProduct) {
+          const clone = { ...source };
+          delete clone._id; delete clone.__v; delete clone.createdAt; delete clone.updatedAt; delete clone.legacySource;
+          clone.branch = destination.branch; clone.outlet = destination._id; clone.qty = quantity;
+          [destinationProduct] = await Product.create([clone], { session });
+          destinationProductId = destinationProduct._id;
+        } else {
+          destinationProductId = destinationProduct._id;
+        }
+
+        await StockMovement.create([{
+          number: `${transferNumber}-OUT`,
+          product: source._id, branch: source.branch, outlet: source.outlet, type: 'transfer_out', quantity,
+          quantityBefore: updatedSource.qty, quantityAfter: updatedSource.qty - quantity,
+          reference: String(reference || '').trim() || transferNumber,
+          notes: String(notes || '').trim(),
+          createdBy: request.user.id,
+        }, {
+          number: `${transferNumber}-IN`,
+          product: destinationProductId, branch: destination.branch, outlet: destination._id, type: 'transfer_in', quantity,
+          quantityBefore: destinationBefore, quantityAfter: destinationBefore + quantity,
+          reference: String(reference || '').trim() || transferNumber,
+          notes: String(notes || '').trim(),
+          createdBy: request.user.id,
+        }], { session });
+      });
+    } catch (error) {
+      if (error?.statusCode) return reply.code(error.statusCode).send({ error: error.message });
+      request.log.error(error);
+      return reply.code(500).send({ error: 'Stock transfer could not be completed. No stock was moved.' });
+    } finally {
+      await session.endSession();
+    }
+
+    const [sourceProductResult, destinationProductResult] = await Promise.all([
+      Product.findById(source._id).populate('branch', 'name code').populate('outlet', 'name code'),
+      Product.findById(destinationProductId).populate('branch', 'name code').populate('outlet', 'name code'),
+    ]);
+    return reply.code(201).send({ number: transferNumber, sourceProduct: sourceProductResult, destinationProduct: destinationProductResult });
   });
 
   fastify.get('/api/stock-movements', { preHandler: [fastify.authenticate] }, async request =>
