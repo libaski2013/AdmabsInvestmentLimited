@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - 'mobile-app/**'
+      - 'src/FuelOperations.jsx'
+      - 'src/fuel-operations.css'
+      - 'package-lock.json'
       - '.github/workflows/build-mobile-apk.yml'
 
 jobs:
@@ -23,6 +26,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Install shared web dependencies
+        run: npm ci
       - name: Install mobile dependencies
         working-directory: mobile-app
         run: npm install

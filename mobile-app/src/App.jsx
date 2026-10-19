@@ -1,3 +1,4 @@
+import FuelOperations from '../../src/FuelOperations.jsx';
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ComposedChart,
@@ -2509,7 +2510,7 @@ export default function App() {
       const restored = { ...account, id: account._id || account.id };
       setUser(restored);
       localStorage.setItem("admabs_mobile_user", JSON.stringify(restored));
-      const allowed = [...(CONFIG[restored.role]?.mods || []), ...(restored.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
+      const allowed = [...(CONFIG[restored.role]?.mods || []), ...(restored.permissions || []).map((p) => p.startsWith('fuel.') ? 'fuel' : PERMISSION_MODULES[p]).filter(Boolean)];
       const saved = localStorage.getItem("admabs_mobile_screen");
       setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
     }).catch(() => { setToken(null); localStorage.removeItem("admabs_mobile_user"); setUser(null); }).finally(() => setRestoringSession(false));
@@ -2573,7 +2574,7 @@ export default function App() {
         onLogin={(u) => {
           setUser(u);
           localStorage.setItem("admabs_mobile_user", JSON.stringify(u));
-          const allowed = [...(CONFIG[u.role]?.mods || []), ...(u.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
+          const allowed = [...(CONFIG[u.role]?.mods || []), ...(u.permissions || []).map((p) => p.startsWith('fuel.') ? 'fuel' : PERMISSION_MODULES[p]).filter(Boolean)];
           const saved = localStorage.getItem("admabs_mobile_screen");
           setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
         }}
@@ -2582,7 +2583,7 @@ export default function App() {
   let mods = [
     ...(CONFIG[user.role]?.mods || ["dash"]),
     ...(user.permissions || [])
-      .map((p) => PERMISSION_MODULES[p])
+      .map((p) => p.startsWith('fuel.') ? 'fuel' : PERMISSION_MODULES[p])
       .filter(Boolean),
   ];
   mods = [...new Set(mods)];
@@ -2600,7 +2601,7 @@ export default function App() {
     dash: <Dashboard />,
     pos: <POS user={user} />,
     market: <POS user={user} market />,
-    fuel: <Fuel />,
+    fuel: <FuelOperations user={user} tokenStorageKey="admabs_mobile_token" />,
     inventory: <Inventory user={user} />,
     procurement: <Procurement />,
     customers: <SimpleRecords type="customers" />,

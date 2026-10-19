@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import { FUEL_PERMISSIONS } from '../fuel/domain.js';
 import bcrypt from 'bcryptjs';
 import '../models/Outlet.js';
 
@@ -9,7 +10,7 @@ export const PERMISSIONS = [
   'staff.manage', 'branches.manage', 'system.settings.manage', 'inventory.search_all',
   'payroll.manage', 'sms.manage', 'data.manage', 'tools.currency.use', 'performance.manage',
   'shifts.manage', 'attendance.view', 'customers.payment.receive', 'inventory.price.adjust',
-  'tax.manage',
+  'tax.manage', ...FUEL_PERMISSIONS,
 ];
 
 export default async function userRoutes(fastify) {

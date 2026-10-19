@@ -102,3 +102,7 @@ approach used for Kobies TechZone.
 
 Before shipping a real device build, point `VITE_API_URL` (in `.env`) at your deployed
 backend URL instead of `localhost` — a phone can't reach your dev machine's localhost.
+
+## Fuel Operations review release
+
+The versioned station/nozzle, company credit, meter reconciliation and stock module is documented in [release and migration instructions](docs/fuel-operations-release.md), the [operator guide](docs/fuel-operator-guide.md), and [validation results](docs/fuel-operations-validation.md). Hardware control remains disabled pending equipment verification. Run `npm --prefix server run test:fuel` for the isolated transactional test suite and `npm run test:fuel:ui` for browser fixtures.

@@ -1,3 +1,4 @@
+import { fuelFinancials } from '../fuel/reporting.js';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import Customer from '../models/Customer.js';
@@ -48,15 +49,17 @@ export default async function dashboardRoutes(fastify) {
       ]);
     const lowStock = scopedProducts.filter(p => p.qty <= p.reorderLevel);
 
-    const revenue = salesThisMonth.reduce((s, sale) => s + sale.total, 0);
-    const todayRevenue = salesThisMonth
+    const fuel = await fuelFinancials(scope, monthStart, monthEnd);
+    const retailRevenue = salesThisMonth.reduce((s, sale) => s + sale.total, 0);
+    const revenue = retailRevenue + fuel.revenue;
+    const todayRevenue = fuel.rows.filter(r=>new Date(r.at)>=todayStart).reduce((n,r)=>n+r.revenue,0) + salesThisMonth
       .filter((s) => s.createdAt >= todayStart)
       .reduce((s, sale) => s + sale.total, 0);
     const cogs = salesThisMonth.reduce(
       (s, sale) => s + sale.items.reduce((si, i) => si + (i.cost || 0) * i.qty, 0),
       0
     );
-    const grossProfit = revenue - cogs;
+    const grossProfit = retailRevenue - cogs;
     const expensesTotal = expensesThisMonth.reduce((s, e) => s + e.amount, 0);
     const netProfit = grossProfit - expensesTotal;
     const receivables = customers.reduce((s, c) => s + (c.balance || 0), 0);
@@ -69,7 +72,8 @@ export default async function dashboardRoutes(fastify) {
       branchTotals[key] = (branchTotals[key] || 0) + sale.total;
     }
 
-    const divisionTotals = {};
+    for(const row of fuel.rows) { const key=String(row.branch||'Unassigned');branchTotals[key]=(branchTotals[key]||0)+row.revenue; }
+    const divisionTotals = fuel.revenue ? { Fuel: fuel.revenue } : {};
     for (const sale of salesThisMonth) {
       for (const item of sale.items) {
         const div = DIVISION_MAP[item.category] || 'Online';
@@ -95,6 +99,8 @@ export default async function dashboardRoutes(fastify) {
     while (cursor <= lastMonth && guard++ < 24) { const key = cursor.toISOString().slice(0,7); overviewMap.set(key, { month:key, m:cursor.toLocaleString('en-US',{month:'short',year:'numeric'}), sales:0, purchases:0, soldProductTax:0, orderTax:0, purchasedProductTax:0 }); cursor.setMonth(cursor.getMonth()+1); }
     for (const sale of chartSales) { const row=overviewMap.get(new Date(sale.createdAt).toISOString().slice(0,7)); if (!row) continue; row.sales += Number(sale.subtotal||0); row.orderTax += Number(sale.tax||0); }
     for (const purchase of chartPurchases) { const row=overviewMap.get(new Date(purchase.createdAt).toISOString().slice(0,7)); if (!row) continue; row.purchases += Number(purchase.amount||0); row.purchasedProductTax += Number(purchase.tax||0); }
+    const chartFuel = await fuelFinancials(scope, chartStart, chartEnd);
+    for(const entry of chartFuel.rows) { const row=overviewMap.get(new Date(entry.at).toISOString().slice(0,7));if(row)row.sales+=entry.revenue; }
     const overviewChart=[...overviewMap.values()].map(row=>Object.fromEntries(Object.entries(row).map(([k,v])=>[k,typeof v==='number'?Math.round(v*100)/100:v])));
 
     const alerts = lowStock.slice(0, 4).map((p) => ({
@@ -117,6 +123,7 @@ export default async function dashboardRoutes(fastify) {
     }));
 
     return {
+      fuelRevenue: fuel.revenue, retailRevenue, fuelReceivables: fuel.receivables, profitExcludesFuel: true, fuelAccountingNote: fuel.note,
       revenue: Math.round(revenue),
       todayRevenue: Math.round(todayRevenue),
       grossProfit: Math.round(grossProfit),
@@ -124,8 +131,8 @@ export default async function dashboardRoutes(fastify) {
       receivables: Math.round(receivables),
       expenses: Math.round(expensesTotal),
       cogs: Math.round(cogs),
-      grossMargin: revenue ? +(grossProfit / revenue * 100).toFixed(1) : 0,
-      netMargin: revenue ? +(netProfit / revenue * 100).toFixed(1) : 0,
+      grossMargin: revenue ? +(grossProfit / (retailRevenue || 1) * 100).toFixed(1) : 0,
+      netMargin: revenue ? +(netProfit / (retailRevenue || 1) * 100).toFixed(1) : 0,
       inventoryValue: Math.round(inventoryValue),
       paymentMix: Object.entries(paymentTotals).map(([name, value]) => ({ name, value: Math.round(value) })),
       branchPerformance: Object.entries(branchTotals).map(([branch, value]) => ({ branch, value: Math.round(value) })).sort((a, b) => b.value - a.value),
