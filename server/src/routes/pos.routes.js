@@ -1,3 +1,5 @@
+import { acquireLegacyFuelLease, releaseLegacyFuelLeases } from '../fuel/legacy-lock.js';
+import { Station as FuelStationV2 } from '../fuel/models.js';
 import Sale from '../models/Sale.js';
 import Product from '../models/Product.js';
 import JournalEntry from '../models/JournalEntry.js';
@@ -10,6 +12,7 @@ async function nextInvoiceNumber() {
 }
 
 export default async function posRoutes(fastify) {
+  fastify.addHook('onSend',async(request,reply,payload)=>{await releaseLegacyFuelLeases(request);return payload;});
   fastify.get('/api/verify/receipt/:reference', async (request, reply) => {
     const reference=String(request.params.reference||'').trim();
     const sale=await Sale.findOne({invoiceNumber:reference}).select('invoiceNumber total status createdAt postedAt paymentMethod branch outlet').populate('branch','name code city').populate('outlet','name code division').lean();
@@ -40,6 +43,16 @@ export default async function posRoutes(fastify) {
       const product = productById.get(String(item.product));
       if (!product || item.qty <= 0 || product.qty < item.qty) return reply.code(409).send({ error: `Insufficient stock for ${item.name || 'product'}` });
       if (Number(item.price) !== Number(product.price)) return reply.code(400).send({ error: `Price changed for ${product.name}; refresh the product list` });
+    }
+    // A cut-over fuel outlet has one dispensing/stock/revenue source of truth.
+    // Other retail categories continue through their existing POS workflow.
+    const fuelProducts=products.filter(p=>p.category==='Fuel');
+    for(const product of fuelProducts){
+      const station=await FuelStationV2.exists(product.outlet?{outlet:product.outlet}:product.branch?{branch:product.branch}:{outlet:outlet||null});
+      if(station)return reply.code(409).send({error:'Record this dispensing in Fuel Operations. Generic POS fuel sales are locked after station cutover.'});
+      let fuelOutlet=product.outlet||outlet;
+      if(!fuelOutlet&&product.branch){const matches=await Outlet.find({branch:product.branch,division:'fuel'}).select('_id').lean();if(matches.length===1)fuelOutlet=matches[0]._id;else if(matches.length>1)return reply.code(409).send({error:'Map this fuel product to its station outlet before selling.'});}
+      await acquireLegacyFuelLease(request,fuelOutlet);
     }
     const costById = new Map(products.map((p) => [String(p._id), p.cost || 0]));
     const itemsWithCost = items.map((i) => ({

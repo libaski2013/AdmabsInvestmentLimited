@@ -1,0 +1,370 @@
+.fo {
+  --fo-blue: #123b67;
+  --fo-border: #dbe4ef;
+  color: #172c43;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  max-width: 1600px;
+  margin: auto;
+  padding: 12px;
+}
+.fo * {
+  box-sizing: border-box;
+}
+.fo h2 {
+  font-size: 25px;
+  margin: 0;
+  color: var(--fo-blue);
+}
+.fo h3 {
+  font-size: 17px;
+  margin: 10px 0;
+}
+.fo p {
+  margin: 8px 0;
+}
+.fo button {
+  border: 1px solid var(--fo-border);
+  border-radius: 8px;
+  background: white;
+  color: var(--fo-blue);
+  font-weight: 650;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.fo button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.fo .fo-primary {
+  background: var(--fo-blue);
+  color: white;
+  border-color: var(--fo-blue);
+}
+.fo button:hover {
+  filter: brightness(0.96);
+}
+.fo input,
+.fo select,
+.fo textarea {
+  font: inherit;
+  color: #172c43;
+  background: white;
+  border: 1px solid #bccbdb;
+  padding: 9px;
+  border-radius: 7px;
+  max-width: 100%;
+  min-height: 40px;
+}
+.fo input:focus,
+.fo select:focus,
+.fo button:focus-visible {
+  outline: 3px solid #7abaff;
+  outline-offset: 2px;
+}
+.fo textarea {
+  width: 100%;
+  min-height: 80px;
+}
+.fo-heading,
+.fo-toolbar,
+.fo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.fo-actions {
+  justify-content: flex-start;
+}
+.fo-heading .fo-actions {
+  margin: 0;
+}
+.fo-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #5a6d80;
+}
+.fo-heading p:last-child {
+  color: #5a6d80;
+}
+.fo-toolbar label,
+.fo-company-select {
+  display: flex;
+  flex-direction: column;
+  font-weight: 650;
+  font-size: 12px;
+  gap: 5px;
+}
+.fo-company-select select {
+  max-width: 450px;
+}
+.fo-nav {
+  display: flex;
+  gap: 5px;
+  overflow: auto;
+  border-bottom: 1px solid var(--fo-border);
+  padding-bottom: 10px;
+  margin-bottom: 18px;
+}
+.fo-nav button {
+  white-space: nowrap;
+  background: #f2f6fa;
+  border-color: transparent;
+  font-size: 12px;
+}
+.fo-nav .selected {
+  background: var(--fo-blue);
+  color: white;
+}
+.fo-tag {
+  font-size: 11px;
+  color: #397158;
+  background: #e9f6ef;
+  border: 1px solid #b9ddc7;
+  border-radius: 20px;
+  padding: 6px 11px;
+}
+.fo-card {
+  padding: 18px;
+  background: white;
+  border: 1px solid var(--fo-border);
+  border-radius: 12px;
+  margin: 12px 0;
+  box-shadow: 0 2px 5px #123b6705;
+}
+.fo-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.fo-kpis .fo-card {
+  display: flex;
+  flex-direction: column;
+}
+.fo-kpis strong {
+  font-size: 24px;
+  color: var(--fo-blue);
+  margin-top: 6px;
+}
+.fo small {
+  color: #637487;
+  font-size: 11px;
+}
+.fo-table-wrap {
+  background: white;
+  border: 1px solid var(--fo-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.fo-scroll {
+  overflow-x: auto;
+}
+.fo table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+}
+.fo th {
+  white-space: nowrap;
+  color: #5a7085;
+  background: #f5f8fc;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 12px;
+}
+.fo td {
+  padding: 12px;
+  border-top: 1px solid #e7edf4;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+.fo tbody tr:hover {
+  background: #f8fbff;
+}
+.fo-search {
+  margin: 10px;
+  width: min(380px, 95%);
+}
+.fo-empty {
+  padding: 24px;
+  text-align: center;
+  color: #758496;
+}
+.fo-error,
+.fo-success,
+.fo-hint {
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.fo-error {
+  color: #9f2929;
+  background: #fff1ef;
+  border: 1px solid #f3c5bd;
+}
+.fo-success {
+  color: #246247;
+  background: #ecf8f0;
+  overflow-wrap: anywhere;
+}
+.fo-hint {
+  color: #526c83;
+  background: #edf4fb;
+}
+.fo-exposure {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-left: 4px solid #208166;
+  padding: 16px;
+  background: #edf8f4;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+.fo-exposure strong {
+  width: 100%;
+}
+.fo-reconcile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+.fo-reconcile div {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #e7edf4;
+  padding: 6px 0;
+}
+.fo-row-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.fo-row-actions button {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.fo-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0b1c35aa;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  color: #172c43;
+}
+.fo-form {
+  width: min(760px, 100%);
+  max-height: 93vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 15px 80px #0005;
+}
+.fo-form header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.fo-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.fo-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.fo-fields small {
+  font-weight: 400;
+}
+.fo-fields input[type="checkbox"] {
+  align-self: flex-start;
+  min-height: 24px;
+  width: 24px;
+}
+.fo-wide {
+  grid-column: 1/-1;
+}
+.fo-form footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+.fo details summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+@media (max-width: 640px) {
+  .fo {
+    padding: 6px;
+  }
+  .fo-fields {
+    grid-template-columns: 1fr;
+  }
+  .fo h2 {
+    font-size: 20px;
+  }
+  .fo-kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fo-kpis strong {
+    font-size: 19px;
+  }
+  .fo-toolbar {
+    align-items: stretch;
+  }
+  .fo-overlay {
+    padding: 7px;
+  }
+  .fo-form {
+    padding: 15px;
+  }
+  .fo-exposure {
+    gap: 8px;
+    flex-direction: column;
+  }
+  .fo-tag {
+    font-size: 10px;
+  }
+  .fo-actions button {
+    font-size: 12px;
+  }
+}
+@media print {
+  .fo-nav,
+  .fo-actions,
+  .fo-toolbar,
+  .fo-overlay,
+  .fo button,
+  .fo-search {
+    display: none !important;
+  }
+  .fo-card,
+  .fo-table-wrap {
+    break-inside: avoid;
+  }
+  .fo-scroll {
+    overflow: visible;
+  }
+  .fo {
+    font-size: 10px;
+  }
+}

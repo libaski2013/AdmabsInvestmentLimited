@@ -1,3 +1,4 @@
+import FuelOperations from './FuelOperations.jsx';
 import React, { useState, useEffect } from "react";
 import {
   AreaChart,
@@ -13855,7 +13856,7 @@ export default function App() {
       case "inventory":
         return <InventoryScreen />;
       case "fuel":
-        return <FuelScreen />;
+        return <FuelOperations user={currentUser} />;
       case "finance":
         return <FinanceScreen />;
       case "procurement":

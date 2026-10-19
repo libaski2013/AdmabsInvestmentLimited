@@ -1,3 +1,4 @@
+import { Period as FuelPeriodV2 } from '../fuel/models.js';
 import User from '../models/User.js';
 import Sale from '../models/Sale.js';
 import FuelShift from '../models/FuelShift.js';
@@ -12,6 +13,8 @@ export default async function performanceRoutes(fastify){
       Sale.find({...scope,...(personal?{cashier:request.user.id}:{}),status:'posted',createdAt:{$gte:start,$lte:end}}).select('cashier total dailyApprovalStatus').lean(),
       FuelShift.find({...scope,...(personal?{attendant:request.user.id}:{}),openedAt:{$gte:start,$lte:end},status:{$in:['submitted','approved']}}).select('attendant litresSold actualCollected cashVariance status').lean(),
     ]);
+    const newPeriods=await FuelPeriodV2.find({...scope,...(personal?{attendant:request.user.id}:{}),status:'posted',openedAt:{$gte:start,$lte:end}}).lean();
+    for(const p of newPeriods)shifts.push({attendant:p.attendant,litresSold:(p.reconciliation.grossMl-p.reconciliation.nonSaleMl)/1000,actualCollected:p.reconciliation.collectionsCents/100,cashVariance:p.reconciliation.moneyVarianceCents/100,status:'approved'});
     const userFilter=globalRoles.includes(request.user.role)?{active:true,role:{$ne:'super_admin'}}:personal?{_id:request.user.id}:{$or:[{branch:{$in:request.user.branchIds||[]}},{branches:{$in:request.user.branchIds||[]}},{outlets:{$in:request.user.outletIds||[]}}]};
     const employees=await User.find(userFilter).select('name employeeNumber role jobTitle branch').populate('branch','name').lean(),ids=employees.map(x=>x._id);
     const rewards=await EmployeeReward.find({periodStart:{$lte:end},periodEnd:{$gte:start},...(!globalRoles.includes(request.user.role)?{employee:{$in:ids}}:{})}).populate('employee','name employeeNumber role jobTitle branch').sort({createdAt:-1}).lean();
