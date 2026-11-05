@@ -194,7 +194,7 @@ try {
     await page.getByRole("heading", { name: "Fuel owed and fuel receivable" }).waitFor();
     await page.getByRole("button", { name: "+ Record fuel loan", exact: true }).click();
     await page.getByRole("dialog").waitFor();
-    await page.getByLabel("Confirmed litres delivered", { exact: true }).waitFor();
+    await page.getByLabel(/^Confirmed litres delivered(?: \*)?$/).waitFor();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("button", { name: "Fuel Sales", exact: true }).click();
     await page
