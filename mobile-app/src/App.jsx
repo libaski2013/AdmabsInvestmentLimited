@@ -1,3 +1,4 @@
+import FuelOperations from '../../src/FuelOperations.jsx';
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ComposedChart,
@@ -37,7 +38,7 @@ const CONFIG = {
     mods: [
       "dash",
       "pos",
-      "market",
+
       "fuel",
       "inventory",
       "customers",
@@ -62,7 +63,7 @@ const CONFIG = {
     mods: [
       "dash",
       "pos",
-      "market",
+
       "fuel",
       "inventory",
       "customers",
@@ -85,7 +86,7 @@ const CONFIG = {
     mods: [
       "dash",
       "pos",
-      "market",
+
       "fuel",
       "inventory",
       "customers",
@@ -133,7 +134,7 @@ const CONFIG = {
     mods: [
       "dash",
       "pos",
-      "market",
+
       "fuel",
       "inventory",
       "customers",
@@ -149,7 +150,7 @@ const CONFIG = {
     mods: [
       "dash",
       "pos",
-      "market",
+
       "fuel",
       "inventory",
       "customers",
@@ -162,11 +163,11 @@ const CONFIG = {
   },
   staff: {
     label: "Sales Attendant",
-    mods: ["pos", "market", "reports", "performance"],
+    mods: ["pos",  "reports", "performance"],
   },
   cashier: {
     label: "Cashier",
-    mods: ["pos", "market", "reports", "performance"],
+    mods: ["pos",  "reports", "performance"],
   },
   fuel: {
     label: "Fuel Attendant",
@@ -220,14 +221,13 @@ const PERMISSION_MODULES = {
   "shifts.manage": "attendance",
 };
 const MODULE_ORDER = [
-  "dash", "pos", "market", "fuel", "inventory", "procurement", "expenses",
+  "dash", "pos",  "fuel", "inventory", "procurement", "expenses",
   "finance", "customers", "reconcile", "approvals", "staff", "reports",
   "company", "website", "payroll", "sms", "tools", "performance", "attendance",
 ];
 const NAV = {
   dash: ["Dashboard", "📊"],
   pos: ["Tyre POS", "🛒"],
-  market: ["Supermarket", "🛍️"],
   fuel: ["Fuel Station", "⛽"],
   inventory: ["Inventory", "📦"],
   procurement: ["Procurement", "🚚"],
@@ -426,79 +426,7 @@ function Dashboard() {
     </>
   );
 }
-function MarketShift({ user, onChange }) {
-  const [list, setList] = useState([]),
-    [modal, setModal] = useState(""),
-    [amount, setAmount] = useState(0),
-    [err, setErr] = useState("");
-  const load = () =>
-    api
-      .workShifts()
-      .then((x) => {
-        setList(x);
-        onChange?.(x.find((s) => s.status === "open"));
-      })
-      .catch((e) => setErr(e.message));
-  useEffect(() => {
-    load();
-  }, []);
-  const open = list.find((s) => s.status === "open");
-  const save = async () => {
-    try {
-      if (modal === "start")
-        await api.startWork({
-          outlet: user.outlets?.find((x) => x.division === "supermarket")?._id,
-          openingFloat: Number(amount),
-        });
-      else await api.closeWork(open._id, { actualCash: Number(amount) });
-      setModal("");
-      load();
-    } catch (x) {
-      setErr(x.message);
-    }
-  };
-  return (
-    <>
-      <div className="card row between">
-        <div>
-          <b>{open ? `${open.workShift} shift open` : "Shift not started"}</b>
-          <p className="muted">
-            {open
-              ? open.number
-              : "Uses assigned outlet schedule and server time"}
-          </p>
-        </div>
-        <button
-          className={`btn ${open ? "red" : "green"}`}
-          onClick={() => setModal(open ? "close" : "start")}
-        >
-          {open ? "Close" : "Start"}
-        </button>
-      </div>
-      {err && <p className="error">{err}</p>}
-      {modal && (
-        <Modal
-          title={modal === "start" ? "Start shift" : "Close shift"}
-          onClose={() => setModal("")}
-        >
-          <label>
-            {modal === "start" ? "Opening float" : "Physical cash handed over"}
-          </label>
-          <input
-            className="field"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          <button className="btn" style={{ width: "100%" }} onClick={save}>
-            Confirm using server time
-          </button>
-        </Modal>
-      )}
-    </>
-  );
-}
-function POS({ user, market = false }) {
+function POS({ user }) {
   const [products, setProducts] = useState([]),
     [cart, setCart] = useState([]),
     [search, setSearch] = useState(""),
@@ -507,9 +435,7 @@ function POS({ user, market = false }) {
     [done, setDone] = useState(null),
     [site, setSite] = useState({}),
     [shift, setShift] = useState(null);
-  const cats = market
-    ? ["Grocery", "Beverages", "Snacks", "Household", "Dairy", "Bakery"]
-    : ["Tyre", "Rim", "Battery", "Service"];
+  const cats = ["Tyre", "Rim", "Battery", "Service"];
   const load = () =>
     api
       .products()
@@ -552,8 +478,7 @@ function POS({ user, market = false }) {
   };
   return (
     <>
-      {market && <MarketShift user={user} onChange={setShift} />}
-      <h2>{market ? "Supermarket POS" : "Tyres, Rims & Batteries POS"}</h2>
+      <h2>Tyres, Rims & Batteries POS</h2>
       <input
         className="field"
         placeholder="Search tyre number, model, barcode or code"
@@ -1834,7 +1759,7 @@ function Company() {
           <p>
             <b>Independent outlets</b>
           </p>
-          {["tyres", "supermarket", "fuel", "warehouse", "head_office"].map(
+          {["tyres", "fuel", "warehouse", "head_office"].map(
             (d) => (
               <label className="item" key={d}>
                 <input
@@ -2509,7 +2434,7 @@ export default function App() {
       const restored = { ...account, id: account._id || account.id };
       setUser(restored);
       localStorage.setItem("admabs_mobile_user", JSON.stringify(restored));
-      const allowed = [...(CONFIG[restored.role]?.mods || []), ...(restored.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
+      const allowed = [...(CONFIG[restored.role]?.mods || []), ...(restored.permissions || []).map((p) => p.startsWith('fuel.') ? 'fuel' : PERMISSION_MODULES[p]).filter(Boolean)];
       const saved = localStorage.getItem("admabs_mobile_screen");
       setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
     }).catch(() => { setToken(null); localStorage.removeItem("admabs_mobile_user"); setUser(null); }).finally(() => setRestoringSession(false));
@@ -2573,7 +2498,7 @@ export default function App() {
         onLogin={(u) => {
           setUser(u);
           localStorage.setItem("admabs_mobile_user", JSON.stringify(u));
-          const allowed = [...(CONFIG[u.role]?.mods || []), ...(u.permissions || []).map((p) => PERMISSION_MODULES[p]).filter(Boolean)];
+          const allowed = [...(CONFIG[u.role]?.mods || []), ...(u.permissions || []).map((p) => p.startsWith('fuel.') ? 'fuel' : PERMISSION_MODULES[p]).filter(Boolean)];
           const saved = localStorage.getItem("admabs_mobile_screen");
           setScreen(saved && allowed.includes(saved) ? saved : (allowed[0] || "dash"));
         }}
@@ -2582,25 +2507,24 @@ export default function App() {
   let mods = [
     ...(CONFIG[user.role]?.mods || ["dash"]),
     ...(user.permissions || [])
-      .map((p) => PERMISSION_MODULES[p])
+      .map((p) => p.startsWith('fuel.') ? 'fuel' : PERMISSION_MODULES[p])
       .filter(Boolean),
   ];
-  mods = [...new Set(mods)];
+  mods = [...new Set(mods)].filter(x => x !== "market");
   mods.sort((a, b) => MODULE_ORDER.indexOf(a) - MODULE_ORDER.indexOf(b));
   const divisions = [...new Set((user.outlets || []).map((x) => x.division))];
   if (!["super_admin", "ceo", "gm"].includes(user.role) && divisions.length)
     mods = mods.filter(
       (x) =>
-        !["pos", "market", "fuel"].includes(x) ||
+        !["pos",  "fuel"].includes(x) ||
         (x === "pos" && divisions.includes("tyres")) ||
-        (x === "market" && divisions.includes("supermarket")) ||
         (x === "fuel" && divisions.includes("fuel")),
     );
+  if (screen === "market") { setScreen("dash"); return null; }
   const content = {
     dash: <Dashboard />,
     pos: <POS user={user} />,
-    market: <POS user={user} market />,
-    fuel: <Fuel />,
+    fuel: <FuelOperations user={user} tokenStorageKey="admabs_mobile_token" />,
     inventory: <Inventory user={user} />,
     procurement: <Procurement />,
     customers: <SimpleRecords type="customers" />,

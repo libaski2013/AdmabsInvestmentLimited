@@ -1,3 +1,6 @@
+import { acquireLegacyFuelLease, releaseLegacyFuelLeases } from '../fuel/legacy-lock.js';
+import { Station } from '../fuel/models.js';
+import FuelTankModel from '../models/FuelTank.js';
 import FuelTank from '../models/FuelTank.js';
 import FuelPump from '../models/FuelPump.js';
 import FuelShift from '../models/FuelShift.js';
@@ -25,6 +28,21 @@ function requestedScope(request, body = {}) {
 }
 
 export default async function fuelRoutes(fastify) {
+  fastify.addHook('onSend',async(request,reply,payload)=>{await releaseLegacyFuelLeases(request);return payload;});
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (request.method === 'GET') return;
+    // Legacy clients cannot post a second set of fuel revenue/stock after a station cuts over.
+    await fastify.authenticate(request,reply); if(reply.sent)return;
+    const body = request.body || {}; let outlet = body.outlet || request.user.outletIds?.[0];
+    if (body.pump) outlet = (await FuelPump.findById(body.pump).lean())?.outlet;
+    if (body.tank) outlet = (await FuelTankModel.findById(body.tank).lean())?.outlet;
+    if (request.params?.id) {
+      const Model = request.url.includes('/dips/') ? FuelDip : FuelShift;
+      outlet = (await Model.findById(request.params.id).lean())?.outlet || outlet;
+    }
+    if (outlet && await Station.exists({ outlet })) return reply.code(409).send({ error: 'This outlet uses Fuel Operations. Refresh the application; legacy fuel writes are locked after cutover.' });
+    await acquireLegacyFuelLease(request,outlet);
+  });
   const auth = { preHandler: [fastify.authenticate] };
   const manage = { preHandler: [fastify.authenticate, fastify.requireRole(...managerRoles)] };
 

@@ -8,6 +8,8 @@ const outletSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
   allowCreditSales: { type: Boolean, default: false },
   taxRate: { type: Number, default: 0.15, min: 0, max: 1 },
+  fuelCutoverAt: Date,
+  fuelLegacyWrites: { type: Number, default: 0, min: 0 },
   runs24Hours: { type: Boolean, default: false },
   legacySource: { system: String, id: String, importedAt: Date },
 }, { timestamps: true });

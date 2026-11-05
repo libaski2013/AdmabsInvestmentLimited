@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TEST ONLY — Fuel UI validation</title>
+  </head>
+  <body style="margin: 0; background: #f3f6fa">
+    <div id="root"></div>
+    <script type="module">
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import FuelOperations from "/src/FuelOperations.jsx";
+      createRoot(document.getElementById("root")).render(
+        React.createElement(FuelOperations, { user: { role: "super_admin" } }),
+      );
+    </script>
+  </body>
+</html>

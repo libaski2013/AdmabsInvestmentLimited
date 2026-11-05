@@ -10,7 +10,11 @@
     "migrate:legacy": "node src/utils/migrate-legacy.js",
     "migrate:legacy:apply": "node src/utils/migrate-legacy.js --apply",
     "migrate:transactions": "node src/utils/migrate-transactions.js",
-    "migrate:transactions:apply": "node src/utils/migrate-transactions.js --apply"
+    "migrate:transactions:apply": "node src/utils/migrate-transactions.js --apply",
+    "test:fuel": "node --test test/fuel.*.test.js",
+    "test:fuel:unit": "node --test test/fuel.domain.test.js",
+    "migrate:fuel": "node src/utils/migrate-fuel-operations.js",
+    "migrate:fuel:apply": "node src/utils/migrate-fuel-operations.js --apply"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

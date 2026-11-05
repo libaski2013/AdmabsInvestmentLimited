@@ -1,0 +1,30 @@
+name: Fuel operations validation
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  fuel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MONGOMS_DISABLE_POSTINSTALL: '1'
+      MONGOMS_DOWNLOAD_IGNORE_MISSING_HEADER: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - run: npm ci
+      - run: npm --prefix server ci
+      - run: npm --prefix server run test:fuel
+      - run: npm run build
+      - run: npm --prefix mobile-app ci
+      - run: npm --prefix mobile-app run build
+        env:
+          VITE_API_URL: https://example.invalid/api
+      - run: npx playwright install --with-deps chromium
+      - run: node server/test/fuel-ui.mjs

@@ -2,7 +2,10 @@ import SiteContent from '../models/SiteContent.js';
 
 export default async function siteRoutes(fastify) {
   fastify.get('/api/site/content', async () => {
-    return SiteContent.findOneAndUpdate({ key: 'main' }, { $setOnInsert: { key: 'main' } }, { new: true, upsert: true, setDefaultsOnInsert: true }).lean();
+    const content = await SiteContent.findOneAndUpdate({ key: 'main' }, { $setOnInsert: { key: 'main' } }, { new: true, upsert: true, setDefaultsOnInsert: true }).lean();
+    if (content.aboutText === 'Admabs operates tyre, rim and battery outlets alongside selected filling-station and supermarket locations.')
+      content.aboutText = 'Admabs operates tyre, rim and battery outlets alongside selected filling-station locations.';
+    return content;
   });
 
   fastify.patch('/api/site/content', {
