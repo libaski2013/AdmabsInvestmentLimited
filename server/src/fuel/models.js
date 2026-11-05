@@ -379,3 +379,33 @@ export const Adjustment = model("FuelAdjustmentV2", {
   invoice: id("FuelSaleV2"),
 });
 models.Adjustment = Adjustment;
+
+// Physical loans are denominated in litres, never company cash receivables.
+export const StationLoan = model("FuelStationLoanV2", {
+  number: { type: String, required: true, unique: true },
+  lender: id("FuelStationV2", true),
+  borrower: id("FuelStationV2", true),
+  fuelType: { type: String, required: true },
+  litresMl: integer(true),
+  outstandingMl: integer(true),
+  reference: String,
+  reason: String,
+  at: Date,
+  user: id("User", true),
+}, [[{ lender: 1, borrower: 1, fuelType: 1 }, {}]]);
+export const StationTransfer = model("FuelStationTransferV2", {
+  number: { type: String, required: true, unique: true },
+  loan: id("FuelStationLoanV2", true),
+  kind: { type: String, enum: ["loan", "repayment"], required: true },
+  fromStation: id("FuelStationV2", true),
+  toStation: id("FuelStationV2", true),
+  fromTank: id("FuelTankV2", true),
+  toTank: id("FuelTankV2", true),
+  litresMl: integer(true),
+  reference: String,
+  reason: String,
+  at: Date,
+  user: id("User", true),
+}, [[{ loan: 1, at: 1 }, {}]]);
+models.StationLoan = StationLoan;
+models.StationTransfer = StationTransfer;

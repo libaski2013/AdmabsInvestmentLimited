@@ -1,5 +1,12 @@
 # Fuel Operations validation results
 
+## 5 November 2026 update
+
+Recovered the unpublished station-loan, company-credit overview and supermarket-withdrawal changes. All 33 backend domain/integration tests passed on a disposable TEST_ONLY MongoDB replica set. Desktop and mobile production builds passed. The loan test covers permission denial for an unassigned station, partial/full repayment, excess repayment rejection, idempotency and atomic tank stock updates. Supermarket withdrawal rejects old-client writes while retaining historical stock.
+
+The first backend attempt timed out during database setup while downloading MongoDB; the cached retry passed all 33 tests. Browser validation remains blocked here: system Chromium cannot create its process socket (Operation not permitted). No production database, migration or deployment was accessed. Apply the additive fuel migration for the new loan/transfer collections before production use.
+
+
 Review environment: 18 October 2026. Repository base: `43321673bfc63c3a48a2417071f5d06409d9e716`.
 
 | Check | Result |

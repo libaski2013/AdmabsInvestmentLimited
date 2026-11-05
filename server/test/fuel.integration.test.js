@@ -1,3 +1,7 @@
+import branchRoutes from "../src/routes/branches.routes.js";
+import inventoryRoutes from "../src/routes/inventory.routes.js";
+import workforceRoutes from "../src/routes/workforce.routes.js";
+import Product from "../src/models/Product.js";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import posRoutes from "../src/routes/pos.routes.js";
@@ -148,6 +152,9 @@ before(
     await app.register(legacyRoutes);
     await app.register(dashboardRoutes);
     await app.register(posRoutes);
+    await app.register(branchRoutes);
+    await app.register(inventoryRoutes);
+    await app.register(workforceRoutes);
     await app.register(analyticsRoutes);
     await app.ready();
   },
@@ -842,4 +849,51 @@ test("cutover refuses in-flight legacy writes and succeeds after they drain", as
   );
   await req("/stations", body, 200, key);
   assert.ok((await Outlet.findById(outlet._id)).fuelCutoverAt);
+});
+
+test("station loans track litres, partial repayment, idempotency and atomic stock", async () => {
+  const dest = await setup("LOAN-DEST");
+  const body = { kind: "loan", fromTank: tank._id, toTank: dest.tank._id,
+    litres: "100", reference: "TEST loan", reason: "TEST shortage", confirmReceived: true };
+  await req("/interstation", { ...body, confirmReceived: false }, 400);
+  const limited = await User.create({ name: "TEST scoped", username: "test-scoped-loans", passwordHash: "TEST ONLY", role: "branch", branch: station.branch, branches: [station.branch], outlets: [station.outlet] });
+  const limitedToken = app.jwt.sign({ id: String(limited._id), role: "branch" });
+  // A source station manager cannot debit an unassigned receiving station.
+  const denied = await app.inject({ method: "POST", url: "/api/fuel/operations/interstation",
+    headers: { authorization: `Bearer ${limitedToken}`, "idempotency-key": randomUUID() }, payload: body });
+  assert.ok([403, 404].includes(denied.statusCode), denied.body);
+  const key = randomUUID();
+  const first = await req("/interstation", body, 200, key);
+  await req("/interstation", body, 200, key);
+  assert.equal((await Tank.findById(tank._id)).bookMl, 900000);
+  assert.equal((await Tank.findById(dest.tank._id)).bookMl, 1100000);
+  const repayment = { ...body, kind: "repayment", loan: first.loan._id,
+    fromTank: dest.tank._id, toTank: tank._id, litres: "40" };
+  await req("/interstation", repayment);
+  await req("/interstation", { ...repayment, litres: "61" }, 409);
+  const report = await req(`/stations/${station._id}/interstation`);
+  assert.equal(report.loans[0].outstandingMl, 60000);
+  assert.equal(report.transfers.length, 2);
+  assert.equal((await Tank.findById(tank._id)).bookMl, 940000);
+  await req("/interstation", { ...repayment, fromTank: tank._id, toTank: dest.tank._id }, 400);
+  await req("/interstation", { ...body, litres: "10000" }, 409);
+  assert.equal((await req(`/stations/${station._id}/interstation`)).loans.length, 1);
+  await req("/interstation", { ...repayment, litres: "60" });
+  assert.equal((await req(`/stations/${station._id}/interstation`)).loans[0].outstandingMl, 0);
+});
+
+
+test("withdrawn supermarket rejects old clients and retains historical stock", async () => {
+  const mart = await Outlet.create({ branch: station.branch, code: "TEST-MART", name: "TEST supermarket", division: "supermarket" });
+  const product = await Product.create({ code: "TEST-GROCERY", name: "TEST groceries", category: "Grocery", qty: 10, price: 5, cost: 2, branch: station.branch, outlet: mart._id });
+  const call = async (method, url, payload) => app.inject({ method, url, headers: { authorization: `Bearer ${token}` }, ...(payload ? { payload } : {}) });
+  assert.equal((await call("POST", "/api/work-shifts/start", { outlet: String(mart._id) })).statusCode, 410);
+  assert.equal((await call("POST", "/api/outlets", { branch: station.branch, code: "NEW-MART", name: "New", division: "supermarket" })).statusCode, 410);
+  assert.equal((await call("POST", `/api/products/${product._id}/stock`, { qty: 20 })).statusCode, 410);
+  assert.equal((await call("POST", "/api/sales", { items: [{ product: String(product._id), qty: 1, price: 5 }] })).statusCode, 410);
+  const products = (await call("GET", "/api/products?category=Grocery")).json();
+  assert.equal(products.length, 0);
+  const outlets = (await call("GET", "/api/outlets")).json();
+  assert.ok(!outlets.some(o => o.division === "supermarket"));
+  assert.equal((await Product.findById(product._id)).qty, 10);
 });

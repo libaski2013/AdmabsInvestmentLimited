@@ -25,6 +25,8 @@ import {
   Connection,
   Inbox,
   Adjustment,
+  StationLoan,
+  StationTransfer,
 } from "../fuel/models.js";
 import {
   fail,
@@ -1577,6 +1579,64 @@ export default async function fuelOperations(fastify) {
     await payment.save({ session: s });
     await audit(s, r.user, "Payment", "reversed", null, payment, why);
     return payment;
+  });
+  get("/interstation/tanks", "fuel.stock.manage", async (r) => {
+    const stations = await Station.find({ ...scopeFilter(r.user), active: true }).lean();
+    const tanks = await Tank.find({ station: { $in: stations.map(st => st._id) }, active: true }).lean();
+    return tanks.map(t => ({ ...t, label: `${stations.find(st => String(st._id) === String(t.station)).code} / ${t.code} / ${t.fuelType}` }));
+  });
+  get("/stations/:id/interstation", "fuel.view", async (r) => {
+    const station = await authorisedStation(r.user, r.params.id);
+    const loans = await StationLoan.find({
+      $or: [{ lender: station._id }, { borrower: station._id }],
+    }).sort({ at: -1 }).lean();
+    const transfers = await StationTransfer.find({ loan: { $in: loans.map(l => l._id) } })
+      .sort({ at: -1 }).lean();
+    return { loans, transfers };
+  });
+  post("/interstation", "fuel.stock.manage", async (r, s) => {
+    const b = r.body;
+    fail(b.confirmReceived === true, "Confirm physical delivery and receipt at both stations");
+    fail(["loan", "repayment"].includes(b.kind), "Choose loan or repayment");
+    const why = reason(b), reference = text(b.reference, true);
+    const litresMl = decimal(b.litres, 3, { positive: true });
+    // Stable lock order and transaction retries prevent double allocation and stock loss.
+    const source = await Tank.findById(b.fromTank).session(s);
+    const target = await Tank.findById(b.toTank).session(s);
+    fail(source && target, "Select source and destination tanks");
+    fail(String(source.station) !== String(target.station), "Select two different stations");
+    fail(source.fuelType === target.fuelType, "Both tanks must hold the same fuel type");
+    const stations = {};
+    for (const id of [String(source.station), String(target.station)].sort())
+      stations[id] = await lockStation(r.user, id, s);
+    let loan;
+    if (b.kind === "repayment") {
+      loan = await StationLoan.findById(b.loan).session(s);
+      fail(loan && String(loan.borrower) === String(source.station) &&
+        String(loan.lender) === String(target.station) && loan.fuelType === source.fuelType,
+        "Repayment must return the same fuel type to the original lending station");
+      fail(litresMl <= loan.outstandingMl, "Repayment exceeds outstanding litres", 409);
+      loan.outstandingMl -= litresMl;
+      await loan.save({ session: s });
+    } else {
+      loan = await create(StationLoan, {
+        number: number("FL"), lender: source.station, borrower: target.station,
+        fuelType: source.fuelType, litresMl, outstandingMl: litresMl,
+        reference, reason: why, at: new Date(), user: r.user.id,
+      }, s);
+    }
+    const transfer = await create(StationTransfer, {
+      number: number("FT"), loan: loan._id, kind: b.kind,
+      fromStation: source.station, toStation: target.station,
+      fromTank: source._id, toTank: target._id, litresMl,
+      reference, reason: why, at: new Date(), user: r.user.id,
+    }, s);
+    const outgoing = await stock(s, r.user, stations[String(source.station)], source._id,
+      -litresMl, `station_${b.kind}_out`, transfer.number, why);
+    await stock(s, r.user, stations[String(target.station)], target._id,
+      litresMl, `station_${b.kind}_in`, transfer.number, why, outgoing._id);
+    await audit(s, r.user, "StationTransfer", b.kind, null, transfer, why);
+    return { loan, transfer };
   });
   post("/stations/:id/stock", "fuel.stock.manage", async (r, s) => {
     const station = await lockStation(r.user, r.params.id, s);

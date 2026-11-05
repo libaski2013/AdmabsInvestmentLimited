@@ -59,7 +59,6 @@ const MONTHLY = [
 const DIV = [
   { n: "Tyres & Batteries", v: 387, c: C.acc },
   { n: "Fuel", v: 198, c: C.red },
-  { n: "Supermarket", v: 93, c: C.green },
   { n: "Online", v: 37, c: C.gold },
 ];
 const BRANCHES = [
@@ -89,15 +88,6 @@ const BRANCHES = [
     pft: 22400,
     stf: 14,
     tr: "+5%",
-  },
-  {
-    id: "b4",
-    n: "Supermarket",
-    div: "Super",
-    rev: 93200,
-    pft: 18640,
-    stf: 22,
-    tr: "+6%",
   },
 ];
 const RECENT = [
@@ -1062,7 +1052,6 @@ const COA = [
   { code: "3002", n: "Retained Earnings", type: "Equity", bal: 312000 },
   { code: "4001", n: "Tyre & Battery Revenue", type: "Income", bal: 268430 },
   { code: "4002", n: "Fuel Revenue", type: "Income", bal: 198400 },
-  { code: "4003", n: "Supermarket Revenue", type: "Income", bal: 93200 },
   { code: "5001", n: "COGS — Tyres", type: "Expense", bal: 185400 },
   { code: "5002", n: "COGS — Fuel", type: "Expense", bal: 75200 },
   { code: "6001", n: "Salaries & Wages", type: "Expense", bal: 48200 },
@@ -1716,7 +1705,6 @@ const ROLES_L = [
 const NAV = [
   { id: "dashboard", icon: "📊", label: "Dashboard" },
   { id: "pos", icon: "🛒", label: "Point of Sale" },
-  { id: "supermarket", icon: "🛍️", label: "Supermarket POS" },
   { id: "quotes", icon: "📝", label: "Quotations" },
   { id: "inventory", icon: "📦", label: "Inventory" },
   { id: "fuel", icon: "⛽", label: "Fuel Station" },
@@ -2080,7 +2068,7 @@ function Splash({ onDone }) {
             margin: "0 0 40px",
           }}
         >
-          TYRES · BATTERIES · FUEL · SUPERMARKET · ONLINE
+          TYRES · BATTERIES · FUEL · ONLINE
         </p>
         <div style={{ width: 260, margin: "0 auto" }}>
           <div
@@ -3259,409 +3247,6 @@ function POSScreen() {
                   style={{ flex: 2 }}
                 />
               </div>
-            </>
-          }
-        />
-      )}
-    </div>
-  );
-}
-
-/* ─── SUPERMARKET POS ─── */
-const SM_CATS = [
-  "All",
-  "Grocery",
-  "Beverages",
-  "Snacks",
-  "Household",
-  "Dairy",
-  "Bakery",
-];
-function SupermarketScreen() {
-  const [cart, setCart] = useState([]);
-  const [search, setSearch] = useState("");
-  const [cat, setCat] = useState("All");
-  const [method, setMethod] = useState("Cash");
-  const [done, setDone] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState("");
-  const [catalog, setCatalog] = useState([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    api
-      .products()
-      .then((list) =>
-        setCatalog(
-          list
-            .filter((p) => SM_CATS.includes(p.category) && p.category !== "All")
-            .map((p) => ({
-              id: p._id,
-              n: p.name,
-              price: p.price,
-              cat: p.category,
-              icon: p.icon,
-              qty: p.qty,
-            })),
-        ),
-      )
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-  const filtered = catalog.filter(
-    (p) =>
-      (cat === "All" || p.cat === cat) &&
-      (!search || p.n.toLowerCase().includes(search.toLowerCase())),
-  );
-  const add = (p) =>
-    setCart((c) => {
-      const ex = c.find((i) => i.id === p.id);
-      return ex
-        ? c.map((i) => (i.id === p.id ? { ...i, qty: i.qty + 1 } : i))
-        : [...c, { ...p, qty: 1 }];
-    });
-  const sub2 = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const tax = sub2 * 0.15;
-  const total = sub2 + tax;
-  const charge = () => {
-    setSaving(true);
-    setSaveErr("");
-    api
-      .createSale({
-        items: cart.map((i) => ({
-          product: i.id,
-          name: i.n,
-          category: i.cat,
-          price: i.price,
-          qty: i.qty,
-        })),
-        paymentMethod: method,
-      })
-      .then(() => setDone(true))
-      .catch((e) => setSaveErr(e.message))
-      .finally(() => setSaving(false));
-  };
-  if (done)
-    return (
-      <div style={{ padding: "0 14px 20px", textAlign: "center" }}>
-        <div
-          style={{
-            background: `${r(C.green)}0.07)`,
-            borderRadius: 20,
-            padding: "32px 20px",
-            margin: "20px 0",
-            border: `1px solid ${r(C.green)}0.2)`,
-          }}
-        >
-          <p style={{ fontSize: 60, margin: "0 0 12px" }}>✅</p>
-          <p
-            style={{
-              color: C.green,
-              fontWeight: 900,
-              fontSize: 20,
-              margin: "0 0 4px",
-            }}
-          >
-            SALE COMPLETE
-          </p>
-          <p
-            style={{
-              color: C.white,
-              fontWeight: 900,
-              fontSize: 30,
-              fontFamily: "monospace",
-              margin: "16px 0 4px",
-            }}
-          >
-            ${total.toFixed(2)}
-          </p>
-          <p style={{ color: C.muted, fontSize: 11, margin: "0 0 24px" }}>
-            via {method}
-          </p>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-            <OBtn
-              ch="NEW SALE"
-              onClick={() => {
-                setDone(false);
-                setCart([]);
-              }}
-            />
-            <Btn ch="🖨️ PRINT" color={C.green} />
-          </div>
-        </div>
-      </div>
-    );
-  return (
-    <div style={{ padding: "0 14px 20px" }}>
-      <div style={{ position: "relative", marginBottom: 10 }}>
-        <span
-          style={{
-            position: "absolute",
-            left: 12,
-            top: "50%",
-            transform: "translateY(-50%)",
-            fontSize: 14,
-            color: C.muted,
-          }}
-        >
-          🔍
-        </span>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search products or scan barcode..."
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            background: C.s1,
-            border: `1.5px solid ${C.bdr}`,
-            borderRadius: 12,
-            padding: "11px 14px 11px 36px",
-            fontSize: 13,
-            color: C.white,
-            outline: "none",
-          }}
-        />
-      </div>
-      <div
-        style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}
-      >
-        {SM_CATS.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCat(c)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 20,
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: "pointer",
-              border: `1.5px solid ${cat === c ? C.green : C.bdr}`,
-              background: cat === c ? `${r(C.green)}0.15)` : "transparent",
-              color: cat === c ? C.green : C.muted,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-      {loading ? (
-        <p style={{ color: C.muted, fontSize: 12 }}>Loading…</p>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 8,
-            marginBottom: 16,
-          }}
-        >
-          {filtered.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => add(p)}
-              style={{
-                padding: "12px 10px",
-                borderRadius: 14,
-                cursor: "pointer",
-                textAlign: "left",
-                background: C.s1,
-                border: `1px solid ${C.bdr}`,
-              }}
-            >
-              <span style={{ fontSize: 24, display: "block", marginBottom: 6 }}>
-                {p.icon}
-              </span>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: C.white,
-                  margin: "0 0 3px",
-                  lineHeight: 1.3,
-                }}
-              >
-                {p.n}
-              </p>
-              <p
-                style={{
-                  fontSize: 13,
-                  fontWeight: 900,
-                  color: C.green,
-                  margin: 0,
-                  fontFamily: "monospace",
-                }}
-              >
-                ${p.price.toFixed(2)}
-              </p>
-            </button>
-          ))}
-        </div>
-      )}
-      {cart.length > 0 && (
-        <Card
-          gl
-          ch={
-            <>
-              <p
-                style={{
-                  fontWeight: 800,
-                  fontSize: 12,
-                  color: C.muted,
-                  letterSpacing: "0.1em",
-                  margin: "0 0 10px",
-                }}
-              >
-                🛍️ BASKET — {cart.length} line{cart.length !== 1 ? "s" : ""}
-              </p>
-              {cart.map((i) => (
-                <div
-                  key={i.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 8,
-                  }}
-                >
-                  <span style={{ fontSize: 18 }}>{i.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: C.white,
-                        fontWeight: 600,
-                        margin: 0,
-                      }}
-                    >
-                      {i.n}
-                    </p>
-                    <p style={{ fontSize: 10, color: C.muted, margin: 0 }}>
-                      ${i.price.toFixed(2)} × {i.qty}
-                    </p>
-                  </div>
-                  <span
-                    style={{
-                      fontWeight: 800,
-                      color: C.green,
-                      fontFamily: "monospace",
-                      fontSize: 12,
-                    }}
-                  >
-                    ${(i.price * i.qty).toFixed(2)}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setCart((c) => c.filter((x) => x.id !== i.id))
-                    }
-                    style={{
-                      background: `${r(C.red)}0.15)`,
-                      border: "none",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      color: C.red,
-                      fontSize: 16,
-                      padding: "2px 7px",
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <div
-                style={{
-                  borderTop: `1px solid ${C.bdr}`,
-                  paddingTop: 10,
-                  marginTop: 4,
-                }}
-              >
-                {[
-                  ["Subtotal", `$${sub2.toFixed(2)}`],
-                  ["VAT (15%)", `$${tax.toFixed(2)}`],
-                  ["TOTAL DUE", `$${total.toFixed(2)}`],
-                ].map(([l, v]) => (
-                  <div
-                    key={l}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: 5,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: l === "TOTAL DUE" ? 13 : 11,
-                        fontWeight: l === "TOTAL DUE" ? 900 : 500,
-                        color: l === "TOTAL DUE" ? C.white : C.muted,
-                      }}
-                    >
-                      {l}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: l === "TOTAL DUE" ? 16 : 11,
-                        fontWeight: l === "TOTAL DUE" ? 900 : 600,
-                        color: l === "TOTAL DUE" ? C.green : C.white,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {v}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p
-                style={{
-                  fontSize: 10,
-                  fontWeight: 800,
-                  color: C.muted,
-                  letterSpacing: "0.12em",
-                  margin: "12px 0 8px",
-                }}
-              >
-                PAYMENT METHOD
-              </p>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  flexWrap: "wrap",
-                  marginBottom: 12,
-                }}
-              >
-                {["Cash", "Card", "EcoCash", "Bank Transfer"].map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMethod(m)}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: 20,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      border: `1.5px solid ${method === m ? C.green : C.bdr}`,
-                      background:
-                        method === m ? `${r(C.green)}0.15)` : "transparent",
-                      color: method === m ? C.green : C.muted,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-              {saveErr && (
-                <p style={{ color: C.red, fontSize: 11, margin: "0 0 8px" }}>
-                  ⚠️ {saveErr}
-                </p>
-              )}
-              <Btn
-                ch={saving ? "Processing…" : `⚡ CHARGE $${total.toFixed(2)}`}
-                color={C.green}
-                onClick={charge}
-                disabled={saving}
-                style={{ width: "100%" }}
-              />
             </>
           }
         />
@@ -6225,13 +5810,6 @@ function InventoryScreen() {
           value={`$${(stockValue / 1000).toFixed(1)}k`}
           sub="At cost"
           color={C.green}
-        />
-        <Stat
-          icon="📅"
-          label="NEAR EXPIRY"
-          value="6 items"
-          sub="Supermarket"
-          color={C.gold}
         />
       </div>
       <TabBar
@@ -12718,7 +12296,6 @@ function WebsiteScreen() {
                 "About Admabs",
                 "Tyres & Batteries",
                 "Filling Stations",
-                "Supermarkets",
                 "Branch Locator",
                 "Promotions",
                 "Corporate & Fleet",
@@ -12816,13 +12393,6 @@ function SettingsScreen() {
       type: "Filling Station",
       mgr: "Charles Dube",
       staff: 14,
-    },
-    {
-      id: "br4",
-      n: "Harare Supermarket",
-      type: "Supermarket",
-      mgr: "Rudo Chikwanda",
-      staff: 22,
     },
     {
       id: "br5",
@@ -13421,7 +12991,6 @@ function Sidebar({ current, onNav, onClose, role, pendingApprovals }) {
               [
                 "dashboard",
                 "pos",
-                "supermarket",
                 "quotes",
                 "inventory",
                 "customers",
@@ -13812,7 +13381,6 @@ export default function App() {
   const TITLES = {
     dashboard: "Dashboard",
     pos: "Point of Sale",
-    supermarket: "Supermarket POS",
     quotes: "Quotations",
     inventory: "Inventory",
     fuel: "Fuel Station",
@@ -13849,8 +13417,6 @@ export default function App() {
         return <DashScreen onNav={setScreen} />;
       case "pos":
         return <POSScreen />;
-      case "supermarket":
-        return <SupermarketScreen />;
       case "quotes":
         return <QuotationsScreen />;
       case "inventory":

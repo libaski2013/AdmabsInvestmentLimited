@@ -35,6 +35,11 @@ async function availableSchedule(user, division, outlet) {
 export { availableSchedule };
 
 export default async function workforceRoutes(fastify) {
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (request.url.split('?')[0].startsWith('/api/work-shifts'))
+      return reply.code(410).send({ error: 'The supermarket module is currently unavailable' });
+  });
+
   const auth = { preHandler: [fastify.authenticate] };
   const scheduleManage = { preHandler: [fastify.authenticate, fastify.requirePermission('shifts.manage', 'super_admin')] };
   const attendanceView = { preHandler: [fastify.authenticate, fastify.requirePermission('attendance.view', 'super_admin', 'ceo')] };
@@ -65,11 +70,11 @@ export default async function workforceRoutes(fastify) {
       .populate('user', 'name username role jobTitle').populate('branchIds', 'name code').populate('outletIds', 'name code division').sort({ loggedInAt: -1 }).limit(1000).lean();
   });
 
-  fastify.get('/api/shift-schedules', auth, async request => ShiftSchedule.find(fastify.scopeFilter(request)).populate('branch outlet assignedUsers', 'name code division role username').sort({ division: 1, startTime: 1 }).lean());
+  fastify.get('/api/shift-schedules', auth, async request => ShiftSchedule.find({ ...fastify.scopeFilter(request), division: 'fuel' }).populate('branch outlet assignedUsers', 'name code division role username').sort({ division: 1, startTime: 1 }).lean());
 
   fastify.post('/api/shift-schedules', scheduleManage, async (request, reply) => {
     const outlet = await Outlet.findById(request.body?.outlet).lean();
-    if (!outlet || !['fuel', 'supermarket'].includes(outlet.division)) return reply.code(400).send({ error: 'Select a fuel or supermarket outlet' });
+    if (!outlet || !['fuel'].includes(outlet.division)) return reply.code(400).send({ error: 'Select a fuel outlet' });
     if (request.body?.workShift === 'night' && !outlet.runs24Hours) return reply.code(409).send({ error: 'Mark this outlet as 24-hour before adding a night schedule' });
     try {
       const schedule = await ShiftSchedule.create({ ...request.body, branch: outlet.branch, division: outlet.division, daysOfWeek: request.body?.daysOfWeek?.length ? request.body.daysOfWeek : [0, 1, 2, 3, 4, 5, 6], createdBy: request.user.id });
@@ -79,6 +84,7 @@ export default async function workforceRoutes(fastify) {
 
   fastify.patch('/api/shift-schedules/:id', scheduleManage, async (request, reply) => {
     const schedule = await ShiftSchedule.findById(request.params.id);
+    if (schedule?.division === 'supermarket' || request.body?.division === 'supermarket') return reply.code(410).send({ error: 'The supermarket module is currently unavailable' });
     if (!schedule) return reply.code(404).send({ error: 'Shift schedule not found' });
     Object.assign(schedule, request.body); await schedule.save(); return schedule;
   });

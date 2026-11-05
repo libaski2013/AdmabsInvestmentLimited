@@ -51,6 +51,7 @@ const tabs = [
   "Vehicles and Drivers",
   "Payments",
   "Statements and Invoices",
+  "Inter-station Fuel",
   "Tanks and Stock",
   "Reports",
   "Integration Settings",
@@ -320,6 +321,8 @@ export default function FuelOperations({
   const [stationId, setStationId] = useState("");
   const [data, setData] = useState(null);
   const [people, setPeople] = useState({ customers: [], attendants: [] });
+  const [interstation, setInterstation] = useState({ loans: [], transfers: [] });
+  const [stationTanks, setStationTanks] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [statement, setStatement] = useState(null);
@@ -357,6 +360,11 @@ export default function FuelOperations({
         fuelRequest(`/stations/${stationId}`),
         fuelRequest(`/companies?station=${stationId}`),
       ]);
+      const debt = await fuelRequest(`/stations/${stationId}/interstation`);
+      setInterstation(debt);
+      if (can("stock.manage")) {
+        setStationTanks(await fuelRequest("/interstation/tanks"));
+      }
       setData(result);
       setCompanies(list);
       setPeople(await fuelRequest(`/stations/${stationId}/people`));
@@ -1465,6 +1473,17 @@ export default function FuelOperations({
           )}
           {tab === "Company Accounts" && (
             <>
+              <h3>Company credit control</h3>
+              <p className="fo-hint">Select a company to manage its credit policy. Use Payments to allocate receipts to unpaid invoices and Statements and Invoices to review overdue balances and vehicle purchases.</p>
+              <Table rows={companies} columns={[
+                ["accountCode", "Account"], ["name", "Company"], ["status", "Status"],
+                ["limitCents", "Credit limit", c => money(c.limitCents)],
+                ["debtCents", "Outstanding debt", c => money(c.debtCents)],
+                ["availableCents", "Remaining credit", c => money(c.availableCents)],
+                ["advanceCents", "Advance payments", c => money(c.advanceCents)],
+                ["termsDays", "Payment terms (days)"],
+                ["overdueBlock", "Overdue protection", c => c.overdueBlock ? "Block overdue credit" : "Supervisor policy"],
+              ]} />
               <div className="fo-toolbar">
                 {companySelect}
                 {can("accounts.adjust") && (
@@ -1910,8 +1929,45 @@ export default function FuelOperations({
               )}
             </>
           )}
+          {tab === "Inter-station Fuel" && (
+            <>
+              <p className="fo-hint">Fuel borrowed between ADMABS stations is owed in litres of the same fuel type. Supplier deliveries do not settle this debt. Post a repayment only after the lending station receives the fuel. Posting requires access to both stations.</p>
+              {can("stock.manage") && <div className="fo-actions">
+                <button onClick={() => open("Confirm fuel loan between stations", [
+                  choice("fromTank", "Lending station / source tank", stationTanks.map(t => [t._id, t.label])),
+                  choice("toTank", "Borrowing station / receiving tank", stationTanks.map(t => [t._id, t.label])),
+                  numeric("litres", "Confirmed litres delivered"), input("reference", "Delivery / receipt reference"), why,
+                  input("confirmReceived", "Physical delivery and receipt confirmed at both stations", { type: "checkbox" }),
+                ], "/interstation", x => ({ ...x, kind: "loan" }))}>+ Record fuel loan</button>
+                <button onClick={() => exportRows("station-fuel-debts", interstation.loans)}>Export debts</button>
+                <button onClick={() => exportRows("station-fuel-transfers", interstation.transfers)}>Export history</button>
+              </div>}
+              <h3>Fuel owed and fuel receivable</h3>
+              <Table rows={interstation.loans} columns={[
+                ["number", "Loan"],
+                ["lender", "Lending station", l => boot?.stations.find(st => st._id === l.lender)?.code || l.lender],
+                ["borrower", "Borrowing station", l => boot?.stations.find(st => st._id === l.borrower)?.code || l.borrower],
+                ["fuelType", "Fuel"], ["litresMl", "Borrowed L", l => f(l.litresMl, 3)],
+                ["outstandingMl", "Outstanding L", l => f(l.outstandingMl, 3)],
+                ["direction", "This station", l => l.outstandingMl === 0 ? "Settled" : l.borrower === stationId ? "Owes fuel" : "Fuel receivable"],
+                ["repay", "Action", l => l.outstandingMl > 0 && can("stock.manage") ? <button onClick={() => open("Return borrowed fuel", [
+                  choice("fromTank", "Borrower's source tank", stationTanks.filter(t => t.station === l.borrower && t.fuelType === l.fuelType).map(t => [t._id, t.label])),
+                  choice("toTank", "Lender's receiving tank", stationTanks.filter(t => t.station === l.lender && t.fuelType === l.fuelType).map(t => [t._id, t.label])),
+                  numeric("litres", `Litres returned (owed ${f(l.outstandingMl, 3)} L)`), input("reference", "Delivery / receipt reference"), why,
+                  input("confirmReceived", "Physical delivery and receipt confirmed at both stations", { type: "checkbox" }),
+                ], "/interstation", x => ({ ...x, kind: "repayment", loan: l._id }))}>Repay fuel</button> : "—"],
+              ]} />
+              <h3>Confirmed deliveries and repayments</h3>
+              <Table rows={interstation.transfers} columns={[
+                ["number", "Transfer"], ["at", "Recorded at"], ["kind", "Type"],
+                ["loan", "Loan", t => interstation.loans.find(l => l._id === t.loan)?.number],
+                ["litresMl", "Delivered L", t => f(t.litresMl, 3)], ["reference", "Receipt reference"], ["reason", "Reason"],
+              ]} />
+            </>
+          )}
           {tab === "Tanks and Stock" && (
             <>
+              {interstation.loans.some(l => l.borrower === stationId && l.outstandingMl > 0) && <p className="fo-hint">This station owes fuel to other ADMABS stations. After receiving supplier fuel, open Inter-station Fuel to arrange and record returns against each outstanding loan.</p>}
               <div className="fo-actions">
                 {can("equipment.configure") && (
                   <>

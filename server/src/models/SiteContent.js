@@ -10,7 +10,7 @@ const siteContentSchema = new mongoose.Schema({
   heroTitle: { type: String, default: 'Confidence for every kilometre.' },
   heroText: { type: String, default: 'Quality tyres, dependable batteries and precision fitting—available through Admabs branches and delivered to customers across Ghana.' },
   aboutTitle: { type: String, default: 'A growing network of connected branches' },
-  aboutText: { type: String, default: 'Admabs operates tyre, rim and battery outlets alongside selected filling-station and supermarket locations.' },
+  aboutText: { type: String, default: 'Admabs operates tyre, rim and battery outlets alongside selected filling-station locations.' },
   phone: String,
   email: String,
   address: String,

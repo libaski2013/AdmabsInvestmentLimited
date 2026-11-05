@@ -38,6 +38,11 @@ export default async function posRoutes(fastify) {
     const productIds = items.filter((i) => i.product).map((i) => i.product);
     const products = await Product.find({ _id: { $in: productIds }, ...fastify.scopeFilter(request) }).lean();
     if (products.length !== productIds.length) return reply.code(403).send({ error: 'One or more products are outside your assigned outlet' });
+    if (products.some(p => ['Grocery','Beverages','Snacks','Household','Bakery','Dairy'].includes(p.category)))
+      return reply.code(410).send({ error: 'The supermarket module is currently unavailable' });
+    const saleOutlets = [...new Set([outlet, ...products.map(p => p.outlet)].filter(Boolean))];
+    if (await Outlet.exists({ _id: { $in: saleOutlets }, division: 'supermarket' }))
+      return reply.code(410).send({ error: 'The supermarket module is currently unavailable' });
     const productById = new Map(products.map(p => [String(p._id), p]));
     for (const item of items) {
       const product = productById.get(String(item.product));

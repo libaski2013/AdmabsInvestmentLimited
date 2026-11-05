@@ -125,6 +125,8 @@ try {
           scope: "TEST ONLY",
         };
       else if (path.endsWith("/companies")) data = [company];
+      else if (path.endsWith("/interstation/tanks")) data = [];
+      else if (path.endsWith("/interstation")) data = { loans: [], transfers: [] };
       else if (path.endsWith("/connections")) data = [];
       else if (path.endsWith("/reports"))
         data = {
@@ -188,6 +190,12 @@ try {
       ),
       "page must fit viewport",
     );
+    await page.getByRole("button", { name: "Inter-station Fuel", exact: true }).click();
+    await page.getByRole("heading", { name: "Fuel owed and fuel receivable" }).waitFor();
+    await page.getByRole("button", { name: "+ Record fuel loan", exact: true }).click();
+    await page.getByRole("dialog").waitFor();
+    await page.getByLabel("Confirmed litres delivered", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("button", { name: "Fuel Sales", exact: true }).click();
     await page
       .getByLabel("Company account", { exact: true })
