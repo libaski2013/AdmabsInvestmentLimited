@@ -715,6 +715,11 @@ test("production writes fail closed if idempotency unique index has not been mig
       },
     });
     assert.equal(r.statusCode, 503, r.body);
+    const prepared = await check.inject({ method: "POST", url: "/api/fuel/operations/prepare", headers: { authorization: `Bearer ${token}` }, payload: {} });
+    assert.equal(prepared.statusCode, 200, prepared.body);
+    const boot = await check.inject({ method: "GET", url: "/api/fuel/operations/bootstrap", headers: { authorization: `Bearer ${token}` } });
+    assert.equal(boot.json().schemaReady, true);
+    assert.equal((await Tank.findById(tank._id)).bookMl, 1000000);
   } finally {
     if (prior === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = prior;
@@ -896,4 +901,52 @@ test("withdrawn supermarket rejects old clients and retains historical stock", a
   const outlets = (await call("GET", "/api/outlets")).json();
   assert.ok(!outlets.some(o => o.division === "supermarket"));
   assert.equal((await Product.findById(product._id)).qty, 10);
+});
+
+test("CEO can prepare additive schema and configure a station; attendants cannot", async () => {
+  const ceo = await User.create({ name: "TEST CEO", username: "test-ceo", passwordHash: "TEST ONLY", role: "ceo" });
+  const ceoToken = app.jwt.sign({ id: String(ceo._id), role: "ceo" });
+  const boot = await req("/bootstrap", undefined, 200, randomUUID(), ceoToken);
+  assert.equal(boot.permissions["fuel.equipment.configure"], true);
+  assert.equal(boot.permissions["fuel.accounts.adjust"], true);
+  assert.equal(boot.permissions["fuel.credit.override"], false);
+  assert.equal((await req("/prepare", {}, 200, randomUUID(), ceoToken)).ready, true);
+  assert.equal((await Tank.findById(tank._id)).bookMl, 1000000);
+  const attendant = await User.create({ name: "TEST attendant", username: "test-no-setup", passwordHash: "TEST ONLY", role: "fuel" });
+  const denied = app.jwt.sign({ id: String(attendant._id), role: "fuel" });
+  await req("/prepare", {}, 403, randomUUID(), denied);
+  await req("/demo/seed", { confirmation: "CREATE TEST FUEL DATA" }, 403, randomUUID(), denied);
+});
+
+test("tracked fuel demo seeds twenty purchases, isolates finances, and removes only its own records", async () => {
+  const { Station, StationLoan, DemoRun } = models;
+  const { fuelFinancials } = await import("../src/fuel/reporting.js");
+  await req("/demo/seed", {}, 400);
+  const body = { confirmation: "CREATE TEST FUEL DATA" }, key = randomUUID();
+  const demo = await req("/demo/seed", body, 200, key);
+  assert.equal(demo.purchases, 20);
+  await req("/demo/seed", body, 200, key);
+  assert.equal((await req("/demo/seed", body)).existing, true);
+  const testStations = await Station.find({ demoBatch: demo.batch }).lean();
+  assert.equal(testStations.length, 3);
+  assert.equal(await FuelSale.countDocuments({ station: { $in: demo.stations } }), 20);
+  assert.equal((await StationLoan.findOne({ borrower: demo.stations[0] })).outstandingMl, 1200000);
+  const finance = await fuelFinancials({}, new Date(0), new Date(Date.now() + 60000));
+  assert.equal(finance.revenue, 0);
+  assert.equal(finance.receivables, 0);
+  assert.equal(await Journal.countDocuments(), 0, "demo transactions must not enter the business general ledger");
+  const demoTank = await Tank.findOne({ station: demo.stations[0] });
+  await req("/interstation", { kind: "loan", fromTank: demoTank._id, toTank: tank._id, litres: "10", reference: "TEST ONLY", reason: "TEST boundary", confirmReceived: true }, 409);
+  await req("/companies", { accountCode: "TEST-MIXED", name: "TEST MIXED", stations: [station._id, demo.stations[0]], termsDays: 30, creditLimit: "1000", fuelTypes: ["diesel"], reason: "TEST boundary" }, 409);
+  const external = await Product.create({ code: "TEST-DEMO-DEPENDENCY", name: "TEST outside fuel", category: "Tyre", price: 10, branch: testStations[0].branch, outlet: testStations[0].outlet });
+  await req("/demo/remove", { confirmation: "REMOVE TEST FUEL DATA" }, 409);
+  assert.equal(await FuelSale.countDocuments({ station: { $in: demo.stations } }), 20);
+  await Product.deleteOne({ _id: external._id });
+  await req("/demo/remove", { confirmation: "REMOVE TEST FUEL DATA" });
+  assert.equal(await FuelSale.countDocuments({ station: { $in: demo.stations } }), 0);
+  assert.equal(await Station.countDocuments({ demoBatch: demo.batch }), 0);
+  assert.equal(await Journal.countDocuments(), 0);
+  assert.equal((await Tank.findById(tank._id)).bookMl, 1000000);
+  assert.ok(await Company.findById(company._id));
+  assert.equal((await DemoRun.findOne({ key: "fuel-flow" })).active, false);
 });

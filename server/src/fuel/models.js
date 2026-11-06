@@ -37,6 +37,7 @@ export const Station = model(
     active: { type: Boolean, default: true },
     revision: { type: Number, default: 0 },
     cutoverAt: Date,
+    demoBatch: String,
   },
   [[{ outlet: 1 }, { unique: true }]],
 );
@@ -139,6 +140,7 @@ export const Period = model(
   ],
 );
 export const Company = model("FuelCompanyV2", {
+  demoBatch: String,
   customer: id("Customer"),
   accountCode: { type: String, unique: true, required: true },
   name: { type: String, required: true },
@@ -409,3 +411,14 @@ export const StationTransfer = model("FuelStationTransferV2", {
 }, [[{ loan: 1, at: 1 }, {}]]);
 models.StationLoan = StationLoan;
 models.StationTransfer = StationTransfer;
+export const DemoRun = model("FuelDemoRunV2", {
+  key: { type: String, required: true, unique: true },
+  active: Boolean,
+  batch: String,
+  branch: id("Branch"),
+  stations: [id("FuelStationV2")],
+  companies: [id("FuelCompanyV2")],
+  user: id("User"),
+  revision: { type: Number, default: 0 },
+});
+models.DemoRun = DemoRun;

@@ -205,6 +205,8 @@ export function permitted(user, permission) {
     "fuel.payments.receive": [...managers, "finance", "accountant"],
     "fuel.periods.post": [...managers, "finance", "accountant"],
     "fuel.stock.manage": managers,
+    "fuel.equipment.configure": ["ceo", "gm"],
+    "fuel.accounts.adjust": ["ceo", "gm"],
     "fuel.reports.company": ["ceo", "gm"],
   };
   return (defaults[permission] || []).includes(user.role);

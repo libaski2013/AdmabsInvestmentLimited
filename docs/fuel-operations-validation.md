@@ -1,5 +1,10 @@
 # Fuel Operations validation results
 
+## Station setup and training controls
+
+The setup fix adds CEO/GM equipment and account configuration privileges, authenticated additive schema preparation, and CEO/Super Admin managed training records. The 35-test backend suite and desktop/mobile builds pass locally. New tests exercise preparation after dropping a required production index, role restrictions, twenty training purchases, idempotency, test/real isolation, exclusion from business financial totals/general ledger, dependency-blocked cleanup and preservation of real records. Browser checks include preparation recovery and the demo confirmation form. Live training data still requires the authorised user to select Create 20 demo purchases; deployment never seeds automatically.
+
+
 ## 5 November 2026 update
 
 Recovered the unpublished station-loan, company-credit overview and supermarket-withdrawal changes. All 33 backend domain/integration tests passed on a disposable TEST_ONLY MongoDB replica set. Desktop and mobile production builds passed. The loan test covers permission denial for an unassigned station, partial/full repayment, excess repayment rejection, idempotency and atomic tank stock updates. Supermarket withdrawal rejects old-client writes while retaining historical stock.

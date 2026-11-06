@@ -84,6 +84,7 @@ try {
     { width: 390, height: 844 },
   ]) {
     const page = await browser.newPage({ viewport });
+    let needsPreparation = false;
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.route("**/api/fuel/operations/**", (route) => {
@@ -95,8 +96,11 @@ try {
           outlets: [],
           permissions,
           transactionsSupported: true,
-          schemaReady: true,
+          schemaReady: !needsPreparation,
+          canManageDemo: true,
+          demoActive: false,
         };
+      else if (path.endsWith("/prepare")) { needsPreparation = false; data = { ready: true }; }
       else if (path.endsWith("/companies/TEST-COMPANY/statement"))
         data = {
           company,
@@ -262,6 +266,17 @@ try {
       path: `/tmp/admabs-fuel-ui-${viewport.width}.png`,
       fullPage: true,
     });
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    needsPreparation = true;
+    await page.reload();
+    await page.getByRole("button", { name: "Prepare fuel module", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "+ Station", exact: true }).isEnabled(), false);
+    await page.getByRole("button", { name: "Prepare fuel module", exact: true }).click();
+    await page.getByRole("button", { name: "Create 20 demo purchases", exact: true }).waitFor({state: "visible"});
+    await page.getByRole("button", { name: "Create 20 demo purchases", exact: true }).click();
+    await page.getByRole("dialog", { name: "Create fuel training records", exact: true }).waitFor();
+    await page.getByLabel(/^Type CREATE TEST FUEL DATA/).waitFor();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
     assert.deepEqual(errors, []);
     console.log(
       `PASS ${viewport.width}px: all navigation tabs, company exposure, sale/opening forms, no page errors or page overflow`,

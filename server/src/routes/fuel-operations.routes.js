@@ -1,3 +1,5 @@
+import { fuelSchemaStatus, prepareFuelSchema } from "../fuel/schema.js";
+import { seedFuelDemo, removeFuelDemo, demoAdministrator } from "../fuel/demo.js";
 import { groupedFuelReports } from "../fuel/reporting.js";
 import mongoose from "mongoose";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -25,6 +27,7 @@ import {
   Connection,
   Inbox,
   Adjustment,
+  DemoRun,
   StationLoan,
   StationTransfer,
 } from "../fuel/models.js";
@@ -87,35 +90,15 @@ export default async function fuelOperations(fastify) {
       });
   });
   const prefix = "/api/fuel/operations";
-  let schemaReady = true;
-  if (process.env.NODE_ENV === "production") {
-    for (const Model of Object.values(models)) {
-      try {
-        const actual = await Model.collection.indexes();
-        for (const [keys, opts] of Model.schema.indexes())
-          if (
-            !actual.some(
-              (index) =>
-                JSON.stringify(index.key) === JSON.stringify(keys) &&
-                (!opts.unique || index.unique) &&
-                (!opts.partialFilterExpression ||
-                  JSON.stringify(index.partialFilterExpression) ===
-                    JSON.stringify(opts.partialFilterExpression)),
-            )
-          )
-            schemaReady = false;
-      } catch {
-        schemaReady = false;
-      }
-    }
-  }
+  let schema = process.env.NODE_ENV === "production" ? await fuelSchemaStatus() : { ready: true, missing: [] };
+  let schemaReady = schema.ready;
   // This hook is encapsulated: retail, website and legacy authentication are unchanged.
   fastify.addHook("preHandler", async (request, reply) => {
     if (!request.url.startsWith(prefix)) return;
     await fastify.authenticate(request, reply);
     if (reply.sent) return;
     request.user = await freshUser(request);
-    if (request.method !== "GET")
+    if (request.method !== "GET" && request.url.split("?")[0] !== prefix + "/prepare")
       fail(
         schemaReady,
         "Fuel schema migration must complete before production writes are enabled",
@@ -137,6 +120,22 @@ export default async function fuelOperations(fastify) {
       atomic(request, (session) => fn(request, session)),
     );
   }
+  fastify.post(prefix + "/prepare", { preHandler: access("fuel.equipment.configure") }, async r => {
+    schema = await prepareFuelSchema();
+    schemaReady = schema.ready;
+    fail(schemaReady, "Fuel indexes still require review: " + schema.missing.join("; "), 503);
+    return { ready: true };
+  });
+  post("/demo/seed", "fuel.equipment.configure", async (r, s) => {
+    demoAdministrator(r.user);
+    fail(r.body.confirmation === "CREATE TEST FUEL DATA", "Confirm test data creation");
+    return seedFuelDemo(r.user, s);
+  });
+  post("/demo/remove", "fuel.equipment.configure", async (r, s) => {
+    demoAdministrator(r.user);
+    fail(r.body.confirmation === "REMOVE TEST FUEL DATA", "Confirm removal of the test fuel batch");
+    return removeFuelDemo(r.user, s);
+  });
   get("/bootstrap", "fuel.view", async (request) => {
     const stations = await Station.find(scopeFilter(request.user))
       .sort({ code: 1 })
@@ -150,6 +149,9 @@ export default async function fuelOperations(fastify) {
       stations,
       outlets,
       schemaReady,
+      schemaMissing: schema.missing,
+      demoActive: Boolean(await DemoRun.exists({ key: "fuel-flow", active: true })),
+      canManageDemo: ["super_admin", "ceo"].includes(request.user.role),
       permissions: Object.fromEntries(
         [
           "fuel.view",
@@ -1057,7 +1059,11 @@ export default async function fuelOperations(fastify) {
   post("/companies", "fuel.accounts.adjust", async (r, s) => {
     const b = r.body;
     fail(b.stations?.length, "Select at least one permitted station");
-    for (const id of b.stations) await authorisedStation(r.user, id, s);
+    const selectedStations = [];
+    for (const id of b.stations) selectedStations.push(await authorisedStation(r.user, id, s));
+    const demoBatch = selectedStations[0].demoBatch || undefined;
+    fail(selectedStations.every(st => (st.demoBatch || undefined) === demoBatch), "Test and real stations cannot share a company account", 409);
+    fail(!demoBatch || !b.customer, "Test companies cannot link real customer accounts", 409);
     if (b.customer)
       fail(
         await Customer.exists({
@@ -1074,6 +1080,7 @@ export default async function fuelOperations(fastify) {
     const company = await create(
       Company,
       {
+        demoBatch,
         accountCode: text(b.accountCode, true).toUpperCase(),
         name: text(b.name, true),
         customer: b.customer || undefined,
@@ -1132,7 +1139,10 @@ export default async function fuelOperations(fastify) {
       if (b[k] != null) company[k] = b[k] === true;
     if (b.stations) {
       fail(b.stations.length, "At least one station required");
-      for (const id of b.stations) await authorisedStation(r.user, id, s);
+      for (const id of b.stations) {
+        const st = await authorisedStation(r.user, id, s);
+        fail((st.demoBatch || "") === (company.demoBatch || ""), "Test and real stations cannot share a company account", 409);
+      }
       company.stations = b.stations;
     }
     if (b.fuelTypes) company.fuelTypes = b.fuelTypes.map((x) => text(x, true));
@@ -1609,6 +1619,7 @@ export default async function fuelOperations(fastify) {
     const stations = {};
     for (const id of [String(source.station), String(target.station)].sort())
       stations[id] = await lockStation(r.user, id, s);
+    fail((stations[String(source.station)].demoBatch || "") === (stations[String(target.station)].demoBatch || ""), "Test fuel cannot be transferred to or from real stations", 409);
     let loan;
     if (b.kind === "repayment") {
       loan = await StationLoan.findById(b.loan).session(s);

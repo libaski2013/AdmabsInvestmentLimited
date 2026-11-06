@@ -200,6 +200,8 @@ export async function journal(
   lines,
   source = "sale",
 ) {
+  // Training runs use their own fuel ledger, never the business general ledger.
+  if (await Station.exists({ outlet: doc.outlet, demoBatch: { $exists: true } }).session(session)) return;
   const items = lines
     .filter((x) => x.debit || x.credit)
     .map((x) => ({
@@ -308,7 +310,8 @@ export async function companyAccess(user, id, stationId, session) {
   const company = await Company.findById(id).session(session);
   fail(company, "Company account not found", 404);
   if (stationId) {
-    await authorisedStation(user, stationId, session);
+    const st = await authorisedStation(user, stationId, session);
+    fail((st.demoBatch || "") === (company.demoBatch || ""), "Test and real company accounts must remain separate", 409);
     fail(
       company.stations.map(String).includes(String(stationId)),
       "Company is not permitted at this station",
@@ -615,6 +618,7 @@ export async function postSale(session, user, body, source = "manual") {
     "Summary mode records company issues only; walk-in sales are derived at reconciliation",
   );
   if (body.customer) {
+    fail(!station.demoBatch, "Test sales cannot link a real customer account", 409);
     const Customer = mongoose.model("Customer");
     fail(
       await Customer.exists({
