@@ -923,13 +923,42 @@ test("tracked fuel demo seeds twenty purchases, isolates finances, and removes o
   const { fuelFinancials } = await import("../src/fuel/reporting.js");
   await req("/demo/seed", {}, 400);
   const body = { confirmation: "\u00a0create\u00a0test  fuel data \n" }, key = randomUUID();
-  const demo = await req("/demo/seed", body, 200, key);
+  // Bound database round trips, independent of local database speed. This
+  // prevents the production timeout caused by replaying twenty interactive sales.
+  let databaseCalls = 0;
+  const oldDebug = mongoose.get("debug");
+  mongoose.set("debug", () => { databaseCalls++; });
+  let demo;
+  try { demo = await req("/demo/seed", body, 200, key); }
+  finally { mongoose.set("debug", oldDebug); }
+  assert.ok(databaseCalls < 160, `training creation used ${databaseCalls} database calls`);
   assert.equal(demo.purchases, 20);
   await req("/demo/seed", body, 200, key);
   assert.equal((await req("/demo/seed", body)).existing, true);
   const testStations = await Station.find({ demoBatch: demo.batch }).lean();
   assert.equal(testStations.length, 3);
   assert.equal(await FuelSale.countDocuments({ station: { $in: demo.stations } }), 20);
+  const demoSales = await FuelSale.find({ station: { $in: demo.stations } }).lean();
+  assert.equal(demoSales.reduce((sum, row) => sum + row.amountCents, 0), 390000);
+  assert.equal(demoSales.reduce((sum, row) => sum + row.paidCents, 0), 200000);
+  assert.equal(demoSales.reduce((sum, row) => sum + row.dueCents, 0), 180000);
+  const demoCompany = await Company.findOne({ demoBatch: demo.batch });
+  assert.equal(demoCompany.debtCents, 180000);
+  assert.equal(demoCompany.advanceCents, 0);
+  const receipt = await Payment.findOne({ company: demoCompany._id });
+  assert.equal(receipt.unappliedCents, 0);
+  assert.equal(receipt.allocations.reduce((sum, row) => sum + row.amountCents, 0), 10000);
+  const demoLedger = await models.Ledger.find({ company: demoCompany._id }).lean();
+  assert.equal(demoLedger.reduce((sum, row) => sum + row.debitCents - row.creditCents, 0), demoCompany.debtCents);
+  assert.equal(demoLedger.reduce((sum, row) => sum + row.advanceDeltaCents, 0), 0);
+  assert.equal(await Audit.countDocuments({ station: { $in: demo.stations }, entity: "FuelSale", action: "posted" }), 20);
+  for (const [i, expected] of [11067000, 8660000, 9883000].entries()) {
+    const t = await Tank.findOne({ station: demo.stations[i] });
+    assert.equal(t.bookMl, expected);
+    const moves = await models.Movement.find({ tank: t._id }).lean();
+    assert.equal(moves.reduce((sum, row) => sum + row.stockDeltaMl, 0), expected);
+  }
+
   assert.equal((await StationLoan.findOne({ borrower: demo.stations[0] })).outstandingMl, 1200000);
   const finance = await fuelFinancials({}, new Date(0), new Date(Date.now() + 60000));
   assert.equal(finance.revenue, 0);
@@ -962,6 +991,26 @@ test("demo failure exposes a safe owner diagnostic and rolls back a live databas
     assert.doesNotMatch(JSON.stringify(response), /TEST_ONLY_required_field/);
     assert.equal(await models.Station.countDocuments({ demoBatch: { $exists: true } }), 0);
     assert.equal(await models.DemoRun.countDocuments(), 0);
+  } finally {
+    await mongoose.connection.db.command({ collMod: collection, validator: {} });
+  }
+  assert.equal((await req("/demo/seed", { confirmation: "CREATE TEST FUEL DATA" })).purchases, 20);
+});
+
+test("training payment rejection rolls back batched sales, stock and audit records", async () => {
+  const collection = Payment.collection.name;
+  const tankBefore = (await Tank.findById(tank._id)).bookMl;
+  await mongoose.connection.db.command({ collMod: collection, validator: { $jsonSchema: { required: ["TEST_ONLY_required_field"] } }, validationLevel: "strict", validationAction: "error" });
+  try {
+    const response = await req("/demo/seed", { confirmation: "CREATE TEST FUEL DATA" }, 500);
+    assert.equal(response.diagnostic.databaseCode, "121");
+    assert.equal(response.diagnostic.step, "record training payment");
+    assert.equal(await models.Station.countDocuments({ demoBatch: { $exists: true } }), 0);
+    assert.equal(await models.DemoRun.countDocuments(), 0);
+    assert.equal(await FuelSale.countDocuments(), 0);
+    assert.equal(await Audit.countDocuments({ entity: "FuelSale" }), 0);
+    assert.equal(await models.Ledger.countDocuments(), 0);
+    assert.equal((await Tank.findById(tank._id)).bookMl, tankBefore);
   } finally {
     await mongoose.connection.db.command({ collMod: collection, validator: {} });
   }

@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import Branch from "../models/Branch.js";
 import Outlet from "../models/Outlet.js";
 import Journal from "../models/JournalEntry.js";
-import { models, DemoRun, Station, Tank, Nozzle, Price, Period, Company, Payment, Vehicle, Driver, StationLoan, StationTransfer } from "./models.js";
-import { fail } from "./domain.js";
-import { create, number, scopeOf, stock, postSale, ledger, journal, allocate, companyLock, lockStation } from "./service.js";
+import { models, DemoRun, Station, Tank, Nozzle, Price, Period, Company, Payment, Vehicle, Driver, StationLoan, StationTransfer, FuelSale, Ledger, Movement, Audit } from "./models.js";
+import { fail, valueOf, add } from "./domain.js";
+import { create, number, scopeOf, stock, ledger, journal, allocate, companyLock, lockStation } from "./service.js";
 
 export function demoAdministrator(user) {
   fail(["super_admin", "ceo"].includes(user.role), "CEO or Super Admin is required to manage test data", 403);
@@ -48,13 +48,50 @@ export async function seedFuelDemo(user, session) {
     termsDays: 30, limitCents: 5000000, stations: stations.map(x => x._id), fuelTypes: ["diesel"] }, session);
   await create(Vehicle, { company: company._id, registration: tag + "-BUS" }, session);
   await create(Driver, { company: company._id, name: "[TEST ONLY] Training Driver" }, session);
+  // These are newly created, isolated fictional accounts. Build the fixture in
+  // memory and validate/insert each collection in a batch rather than running
+  // hundreds of network round trips through the interactive sale endpoint.
+  // Everything still uses this same transaction; no partially visible batch.
+  step = "record training purchases";
+  fail(company.demoBatch === batch && stations.every(s => s.demoBatch === batch), "Training batch ownership mismatch", 409);
+  const saleRows = [], stockRows = [], ledgerRows = [], auditRows = [];
+  const tankUsage = tanks.map(() => 0);
   for (let i = 0; i < 20; i++) {
-    step = "record training purchase " + (i + 1);
-    const litres = 10 + i;
-    await postSale(session, user, { period: periods[i % 3]._id, litres: String(litres),
-      sourceRef: tag + "-SALE-" + (i + 1), eventKey: batch + ":sale:" + i,
-      ...(i % 2 === 0 ? { company: company._id } : { payments: [{ method: "cash", amount: String(litres * 10) }] }) });
+    const index = i % 3, period = periods[index], scope = scopeOf(period);
+    const now = new Date(), litresMl = (10 + i) * 1000;
+    const amountCents = valueOf(litresMl, period.currentPrice), credit = i % 2 === 0;
+    const doc = new FuelSale({ ...scope, number: number("FS2"), period: period._id,
+      nozzle: period.nozzle, tank: period.tank, pumpCode: period.pumpCode, nozzleCode: period.nozzleCode,
+      fuelType: period.fuelType, litresMl, segmentIndex: 0, priceUnits: period.currentPrice,
+      amountCents, paidCents: credit ? 0 : amountCents, prepaidCents: 0,
+      creditCents: credit ? amountCents : 0, dueCents: credit ? amountCents : 0,
+      dueAt: new Date(+now + (credit ? company.termsDays : 0) * 86400000),
+      payments: credit ? [] : [{ method: "cash", amountCents, reference: "" }],
+      company: credit ? company._id : undefined, attendant: user.id, businessDate: period.businessDate,
+      transactionAt: now, entryAt: now, source: "manual", sourceRef: tag + "-SALE-" + (i + 1),
+      eventKey: batch + ":sale:" + i });
+    saleRows.push(doc);
+    tankUsage[index] = add(tankUsage[index], litresMl);
+    stockRows.push({ ...scope, tank: period.tank, period: period._id, kind: "individual_sale",
+      litresMl, stockDeltaMl: -litresMl, status: "posted", reference: doc.number, linkedSale: doc._id,
+      at: now, user: user.id });
+    auditRows.push({ ...scope, entity: "FuelSale", entityId: String(doc._id), action: "posted",
+      user: user.id, at: now, after: doc.toObject() });
+    if (credit) ledgerRows.push({ ...scope, company: company._id, type: "Fuel Purchases", reference: doc.number,
+      debitCents: amountCents, creditCents: 0, advanceDeltaCents: 0, at: now, user: user.id, invoice: doc._id });
   }
+  company.debtCents = add(...ledgerRows.map(row => row.debitCents));
+  fail(company.debtCents <= company.limitCents, "Training credit exceeds its limit", 409);
+  const stockResult = await Tank.bulkWrite(tanks.map((tank, i) => ({ updateOne: {
+    filter: { _id: tank._id, station: stations[i]._id, bookMl: 10000000, openingEstablished: true },
+    update: { $inc: { bookMl: -tankUsage[i] } }
+  } })), { session });
+  fail(stockResult.matchedCount === tanks.length, "Training opening stock changed", 409);
+  await FuelSale.insertMany(saleRows, { session, ordered: true });
+  await Movement.insertMany(stockRows, { session, ordered: true });
+  await Ledger.insertMany(ledgerRows, { session, ordered: true });
+  await Audit.insertMany(auditRows, { session, ordered: true });
+  await company.save({ session });
   // A real receipt/allocation workflow reduces demonstration debt, not revenue.
   step = "record training payment";
   const account = await Company.findById(company._id).session(session);
