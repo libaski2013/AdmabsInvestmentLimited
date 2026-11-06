@@ -922,7 +922,7 @@ test("tracked fuel demo seeds twenty purchases, isolates finances, and removes o
   const { Station, StationLoan, DemoRun } = models;
   const { fuelFinancials } = await import("../src/fuel/reporting.js");
   await req("/demo/seed", {}, 400);
-  const body = { confirmation: "CREATE TEST FUEL DATA" }, key = randomUUID();
+  const body = { confirmation: "\u00a0create\u00a0test  fuel data \n" }, key = randomUUID();
   const demo = await req("/demo/seed", body, 200, key);
   assert.equal(demo.purchases, 20);
   await req("/demo/seed", body, 200, key);

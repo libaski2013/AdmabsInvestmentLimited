@@ -85,6 +85,7 @@ try {
   ]) {
     const page = await browser.newPage({ viewport });
     let needsPreparation = false;
+    let demoPayload;
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.route("**/api/fuel/operations/**", (route) => {
@@ -100,6 +101,7 @@ try {
           canManageDemo: true,
           demoActive: false,
         };
+      else if (path.endsWith("/demo/seed")) { demoPayload = route.request().postDataJSON(); data = { purchases: 20 }; }
       else if (path.endsWith("/prepare")) { needsPreparation = false; data = { ready: true }; }
       else if (path.endsWith("/companies/TEST-COMPANY/statement"))
         data = {
@@ -275,8 +277,12 @@ try {
     await page.getByRole("button", { name: "Create 20 demo purchases", exact: true }).waitFor({state: "visible"});
     await page.getByRole("button", { name: "Create 20 demo purchases", exact: true }).click();
     await page.getByRole("dialog", { name: "Create fuel training records", exact: true }).waitFor();
-    await page.getByLabel(/^Type CREATE TEST FUEL DATA/).waitFor();
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    const demoSave = page.getByRole("dialog").getByRole("button", { name: "Save record", exact: true });
+    assert.equal(await demoSave.isEnabled(), false);
+    await page.getByRole("checkbox", { name: "I confirm creation of fictional fuel training records", exact: true }).check();
+    await demoSave.click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.deepEqual(demoPayload, { confirmation: "CREATE TEST FUEL DATA" });
     assert.deepEqual(errors, []);
     console.log(
       `PASS ${viewport.width}px: all navigation tabs, company exposure, sale/opening forms, no page errors or page overflow`,

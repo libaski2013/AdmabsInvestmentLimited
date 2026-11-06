@@ -115,6 +115,7 @@ function Form({ title, fields, initial, onClose, onSave, children, preview }) {
   const [saving, setSaving] = useState(false);
   const [requestKey, setKey] = useState(crypto.randomUUID());
   const change = (key, value) => {
+    setError("");
     setValues((v) => ({ ...v, [key]: value }));
     setKey(crypto.randomUUID());
   };
@@ -221,6 +222,7 @@ function Form({ title, fields, initial, onClose, onSave, children, preview }) {
               ) : field.type === "checkbox" ? (
                 <input
                   type="checkbox"
+                  required={field.required === true}
                   checked={values[field.key] === true}
                   onChange={(e) => change(field.key, e.target.checked)}
                 />
@@ -283,7 +285,7 @@ function Form({ title, fields, initial, onClose, onSave, children, preview }) {
           <button type="button" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button className="fo-primary" disabled={saving}>
+          <button className="fo-primary" disabled={saving || fields.some(field => field.type === "checkbox" && field.required === true && values[field.key] !== true)}>
             {saving ? "Saving…" : "Save record"}
           </button>
         </footer>
@@ -1141,7 +1143,10 @@ export default function FuelOperations({
         <h3>Fuel training records</h3>
         <p>Create a separate [TEST ONLY] branch with three stations, tanks, nozzles, sample prices, twenty purchases, company credit and a payment. Station A borrows 2,000 L from B, returns 800 L and owes 1,200 L. Sample revenue and debt are excluded from company-wide financial totals.</p>
         <div className="fo-actions">
-          {!boot.demoActive ? <button disabled={!boot.schemaReady} onClick={() => open("Create fuel training records", [input("confirmation", "Type CREATE TEST FUEL DATA")], "/demo/seed", x => x, {}, "Fictional training values only: diesel GHC 10/L, 10,000 L opening stock per tank, zero starting company debt. No real outlet, meter or customer balance will be changed.")}>Create 20 demo purchases</button>
+          {!boot.demoActive ? <button disabled={!boot.schemaReady} onClick={() => open("Create fuel training records", [input("confirmTraining", "I confirm creation of fictional fuel training records", { type: "checkbox", required: true })], "/demo/seed", x => {
+            if (x.confirmTraining !== true) throw new Error("Tick the confirmation checkbox to create training records.");
+            return { confirmation: "CREATE TEST FUEL DATA" };
+          }, {}, "Fictional training values only: diesel GHC 10/L, 10,000 L opening stock per tank, zero starting company debt. No real outlet, meter or customer balance will be changed.")}>Create 20 demo purchases</button>
           : <button disabled={!boot.schemaReady} onClick={() => open("Remove fuel training records", [input("confirmation", "Type REMOVE TEST FUEL DATA")], "/demo/remove", x => x, {}, "Permanently removes only the tracked fuel training batch and its test transactions. Cleanup stops if other business records reference its locations.")}>Remove demo records</button>}
         </div>
       </div>}
