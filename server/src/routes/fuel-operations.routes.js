@@ -1,3 +1,4 @@
+import { confirmsFuelTraining } from "../fuel/confirmation.js";
 import { fuelFailureResponse } from "../fuel/failure.js";
 import { fuelSchemaStatus, prepareFuelSchema } from "../fuel/schema.js";
 import { seedFuelDemo, removeFuelDemo, demoAdministrator } from "../fuel/demo.js";
@@ -122,7 +123,7 @@ export default async function fuelOperations(fastify) {
   });
   post("/demo/seed", "fuel.equipment.configure", async (r, s) => {
     demoAdministrator(r.user);
-    fail(r.body.confirmation === "CREATE TEST FUEL DATA", "Confirm test data creation");
+    fail(confirmsFuelTraining(r.body?.confirmation), "Confirm test data creation");
     return seedFuelDemo(r.user, s);
   });
   post("/demo/remove", "fuel.equipment.configure", async (r, s) => {
