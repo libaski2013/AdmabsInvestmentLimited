@@ -950,3 +950,20 @@ test("tracked fuel demo seeds twenty purchases, isolates finances, and removes o
   assert.ok(await Company.findById(company._id));
   assert.equal((await DemoRun.findOne({ key: "fuel-flow" })).active, false);
 });
+
+test("demo failure exposes a safe owner diagnostic and rolls back a live database validation rejection", async () => {
+  const collection = mongoose.model("Branch").collection.name;
+  await mongoose.connection.db.command({ collMod: collection, validator: { $jsonSchema: { required: ["TEST_ONLY_required_field"] } }, validationLevel: "strict", validationAction: "error" });
+  try {
+    const response = await req("/demo/seed", { confirmation: "CREATE TEST FUEL DATA" }, 500);
+    assert.equal(response.diagnostic.databaseCode, "121");
+    assert.equal(response.diagnostic.step, "create training branch");
+    assert.match(response.error, /collection validation rules/);
+    assert.doesNotMatch(JSON.stringify(response), /TEST_ONLY_required_field/);
+    assert.equal(await models.Station.countDocuments({ demoBatch: { $exists: true } }), 0);
+    assert.equal(await models.DemoRun.countDocuments(), 0);
+  } finally {
+    await mongoose.connection.db.command({ collMod: collection, validator: {} });
+  }
+  assert.equal((await req("/demo/seed", { confirmation: "CREATE TEST FUEL DATA" })).purchases, 20);
+});
