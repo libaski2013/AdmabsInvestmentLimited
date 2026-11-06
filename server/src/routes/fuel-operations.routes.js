@@ -1,3 +1,4 @@
+import { fuelFailureResponse } from "../fuel/failure.js";
 import { fuelSchemaStatus, prepareFuelSchema } from "../fuel/schema.js";
 import { seedFuelDemo, removeFuelDemo, demoAdministrator } from "../fuel/demo.js";
 import { groupedFuelReports } from "../fuel/reporting.js";
@@ -80,14 +81,7 @@ export default async function fuelOperations(fastify) {
     const status = error.statusCode || (clientError ? 400 : 500);
     if (status >= 500)
       request.log.error({ err: error }, "Fuel operation failed");
-    reply
-      .code(status)
-      .send({
-        error:
-          status >= 500 && status !== 503
-            ? "Fuel operation failed; no posting was completed. Review the server log."
-            : error.message,
-      });
+    reply.code(status).send(fuelFailureResponse(error, request, status));
   });
   const prefix = "/api/fuel/operations";
   let schema = process.env.NODE_ENV === "production" ? await fuelSchemaStatus() : { ready: true, missing: [] };

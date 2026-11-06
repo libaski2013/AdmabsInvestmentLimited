@@ -12,15 +12,19 @@ export function demoAdministrator(user) {
 }
 export async function seedFuelDemo(user, session) {
   demoAdministrator(user);
+  let step = "reserve training batch";
+  try {
   const run = await DemoRun.findOneAndUpdate({ key: "fuel-flow" },
     { $setOnInsert: { key: "fuel-flow", active: false }, $inc: { revision: 1 } },
     { upsert: true, new: true, session });
   if (run.active) return { stations: run.stations, batch: run.batch, existing: true };
   const batch = randomUUID(), tag = "TEST-" + batch.slice(0, 8).toUpperCase();
   const at = new Date(Date.now() - 60000);
+  step = "create training branch";
   const branch = await create(Branch, { code: tag, name: "[TEST ONLY] Fuel training", type: "Filling Station", divisions: ["fuel"] }, session);
   const stations = [], tanks = [], periods = [];
   for (const letter of ["A", "B", "C"]) {
+    step = "configure training station " + letter;
     const outlet = await create(Outlet, { code: tag + "-" + letter, name: "[TEST ONLY] Station " + letter,
       branch: branch._id, division: "fuel", runs24Hours: true, fuelCutoverAt: at }, session);
     const station = await create(Station, { branch: branch._id, outlet: outlet._id, code: tag + "-" + letter,
@@ -39,17 +43,20 @@ export async function seedFuelDemo(user, session) {
       segmentStartMl: 0, segmentStartAt: at, segments: [], reason: "TEST ONLY training period" }, session);
     stations.push(station); tanks.push(tank); periods.push(period);
   }
+  step = "create training company and vehicle";
   const company = await create(Company, { demoBatch: batch, accountCode: tag + "-FLEET", name: "[TEST ONLY] Training Transport",
     termsDays: 30, limitCents: 5000000, stations: stations.map(x => x._id), fuelTypes: ["diesel"] }, session);
   await create(Vehicle, { company: company._id, registration: tag + "-BUS" }, session);
   await create(Driver, { company: company._id, name: "[TEST ONLY] Training Driver" }, session);
   for (let i = 0; i < 20; i++) {
+    step = "record training purchase " + (i + 1);
     const litres = 10 + i;
     await postSale(session, user, { period: periods[i % 3]._id, litres: String(litres),
       sourceRef: tag + "-SALE-" + (i + 1), eventKey: batch + ":sale:" + i,
       ...(i % 2 === 0 ? { company: company._id } : { payments: [{ method: "cash", amount: String(litres * 10) }] }) });
   }
   // A real receipt/allocation workflow reduces demonstration debt, not revenue.
+  step = "record training payment";
   const account = await Company.findById(company._id).session(session);
   await companyLock(account, session);
   const payment = await create(Payment, { ...scopeOf(stations[0]), number: number("TEST-RECEIPT"), company: account._id,
@@ -62,6 +69,7 @@ export async function seedFuelDemo(user, session) {
     { accountCode: "2105", accountName: "Fuel advances", credit: 10000 },
   ], "payment");
   await allocate(session, user, account, payment, { allocationMode: "oldest" });
+  step = "record training loan and repayment";
   const loan = await create(StationLoan, { number: number("TEST-LOAN"), lender: stations[1]._id, borrower: stations[0]._id,
     fuelType: "diesel", litresMl: 2000000, outstandingMl: 1200000, reference: tag, reason: "TEST ONLY fuel shortage", at, user: user.id }, session);
   for (const [kind, from, to, litresMl] of [["loan", 1, 0, 2000000], ["repayment", 0, 1, 800000]]) {
@@ -71,10 +79,15 @@ export async function seedFuelDemo(user, session) {
     const outgoing = await stock(session, user, stations[from], tanks[from]._id, -litresMl, "station_" + kind + "_out", transfer.number, "TEST ONLY transfer");
     await stock(session, user, stations[to], tanks[to]._id, litresMl, "station_" + kind + "_in", transfer.number, "TEST ONLY transfer", outgoing._id);
   }
+  step = "finish training batch";
   run.active = true; run.batch = batch; run.branch = branch._id;
   run.stations = stations.map(x => x._id); run.companies = [company._id]; run.user = user.id;
   await run.save({ session });
   return { batch, stations: run.stations, purchases: 20, outstandingLitres: 1200 };
+  } catch (error) {
+    error.fuelDemoStep = step;
+    throw error;
+  }
 }
 
 export async function removeFuelDemo(user, session) {
