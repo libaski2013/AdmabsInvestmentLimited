@@ -346,7 +346,8 @@ export default function FuelOperations({
   const loadBoot = async () => {
     const result = await fuelRequest("/bootstrap");
     setBoot(result);
-    setStationId((id) => id || result.stations[0]?._id || "");
+    setStationId((id) => result.stations.some(st => st._id === id) ? id : result.stations[0]?._id || "");
+    return result;
   };
   useEffect(() => {
     loadBoot().catch((e) => setError(e.message));
@@ -410,8 +411,9 @@ export default function FuelOperations({
     const result = await fuelRequest(path, body, key);
     setModal(null);
     setNotice("Record saved.");
-    await loadBoot();
-    await refresh();
+    const updated = await loadBoot();
+    if (updated.stations.some(st => st._id === stationId)) await refresh();
+    else { setData(null); setCompanyId(""); setStatement(null); }
     return result;
   };
   const action = async (path, body) => {
@@ -1103,12 +1105,12 @@ export default function FuelOperations({
           <p>Meter accountability, company credit and tank stock</p>
         </div>
         <div className="fo-actions">
-          <button onClick={refresh} disabled={loading}>
+          <button onClick={async () => { try { await loadBoot(); await refresh(); } catch (e) { setError(e.message); } }} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </button>
           <button onClick={() => print()}>Print / PDF</button>
           {can("equipment.configure") && (
-            <button onClick={createStation}>+ Station</button>
+            <button onClick={createStation} disabled={boot?.schemaReady === false}>+ Station</button>
           )}
         </div>
       </header>
@@ -1123,9 +1125,11 @@ export default function FuelOperations({
         </p>
       )}
       {boot && boot.schemaReady === false && (
-        <p className="fo-error">
-          The additive fuel schema migration must be applied before posting.
-        </p>
+        <div className="fo-error">
+          <p>The fuel module needs initial preparation before stations or transactions can be saved. Existing records and balances will be preserved.</p>
+          {can("equipment.configure") && <button onClick={() => action("/prepare", {})}>Prepare fuel module</button>}
+          {!can("equipment.configure") && <p>Ask the CEO, General Manager or Super Admin to prepare the fuel module.</p>}
+        </div>
       )}
       {boot && !boot.transactionsSupported && (
         <p className="fo-error">
@@ -1133,6 +1137,15 @@ export default function FuelOperations({
           posting fuel records.
         </p>
       )}
+      {boot?.canManageDemo && <div className="fo-card">
+        <h3>Fuel training records</h3>
+        <p>Create a separate [TEST ONLY] branch with three stations, tanks, nozzles, sample prices, twenty purchases, company credit and a payment. Station A borrows 2,000 L from B, returns 800 L and owes 1,200 L. Sample revenue and debt are excluded from company-wide financial totals.</p>
+        <div className="fo-actions">
+          {!boot.demoActive ? <button disabled={!boot.schemaReady} onClick={() => open("Create fuel training records", [input("confirmation", "Type CREATE TEST FUEL DATA")], "/demo/seed", x => x, {}, "Fictional training values only: diesel GHC 10/L, 10,000 L opening stock per tank, zero starting company debt. No real outlet, meter or customer balance will be changed.")}>Create 20 demo purchases</button>
+          : <button disabled={!boot.schemaReady} onClick={() => open("Remove fuel training records", [input("confirmation", "Type REMOVE TEST FUEL DATA")], "/demo/remove", x => x, {}, "Permanently removes only the tracked fuel training batch and its test transactions. Cleanup stops if other business records reference its locations.")}>Remove demo records</button>}
+        </div>
+      </div>}
+      {data?.station.demoBatch && <p className="fo-hint"><strong>TEST ONLY — Training station.</strong> All quantities, prices, purchases and accounts here are fictional. Real companies and real stations cannot be linked to this training batch.</p>}
       <div className="fo-toolbar">
         <label>
           Station
@@ -1171,8 +1184,8 @@ export default function FuelOperations({
           <p>
             An authorised administrator must select an existing fuel outlet,
             review legacy records, configure tanks and nozzles, and establish
-            genuine meter and stock openings. No sample transactions are
-            created.
+            genuine meter and stock openings. A fuel outlet in a branch is not yet a configured station: choose + Station to link it.
+            {boot?.canManageDemo && " For training, use Create 20 demo purchases above after preparing the module."}
           </p>
         </div>
       )}

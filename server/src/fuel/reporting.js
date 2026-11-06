@@ -1,9 +1,12 @@
 import Journal from "../models/JournalEntry.js";
-import { FuelSale, Period, Adjustment } from "./models.js";
+import { FuelSale, Period, Adjustment, Station } from "./models.js";
 // Read journal recognition, never debt collections, for company-wide fuel revenue.
 export async function fuelFinancials(scope, start, end, { workShift } = {}) {
+  const testOutlets = await Station.find({ demoBatch: { $exists: true } }).distinct("outlet");
+  const testStations = await Station.find({ demoBatch: { $exists: true } }).distinct("_id");
+  const realScope = { $and: [scope, { station: { $nin: testStations } }] };
   let entries = await Journal.find({
-    ...scope,
+    $and: [scope, { outlet: { $nin: testOutlets } }],
     number: /^JF-/,
     date: { $gte: start, $lte: end },
     "lines.accountCode": { $in: ["4100", "4105"] },
@@ -34,10 +37,10 @@ export async function fuelFinancials(scope, start, end, { workShift } = {}) {
   }));
   // Original and reversal journal lines both remain; their signed values cancel exactly once.
   const [invoices, adjustments] = await Promise.all([
-    FuelSale.find({ ...scope, status: "posted", dueCents: { $gt: 0 } })
+    FuelSale.find({ ...realScope, status: "posted", dueCents: { $gt: 0 } })
       .select("dueCents")
       .lean(),
-    Adjustment.find({ ...scope, dueCents: { $gt: 0 } })
+    Adjustment.find({ ...realScope, dueCents: { $gt: 0 } })
       .select("dueCents")
       .lean(),
   ]);

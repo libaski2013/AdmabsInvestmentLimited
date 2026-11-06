@@ -1,5 +1,15 @@
 # ADMABS fuel operator guide
 
+## Preparing the module and training records
+
+A fuel outlet in Branches/Outlets is a location record; it becomes a fuel-operations station only after **+ Station** links it and the operator reviews any legacy shifts. CEO and General Manager accounts now have equipment and company-account setup privileges by default; station assignments and separate credit-override privileges still apply.
+
+If the screen says the schema migration is pending, a CEO, General Manager or Super Admin can select **Prepare fuel module**. This creates missing fuel collections/indexes and rechecks readiness without inventing balances, deleting indexes or cutting over existing outlets. A replica-set database is required. Database permission or conflicting-index errors must be resolved rather than bypassed.
+
+For a training run, the CEO or Super Admin selects **Create 20 demo purchases** and types `CREATE TEST FUEL DATA`. This is an explicit action; installation does not seed records automatically. The tracked batch contains a separate `[TEST ONLY]` branch, stations A/B/C, diesel tanks/nozzles, fictional GHC 10/L prices, 10,000 L sample openings, three open nozzle periods, twenty purchases, a training fleet/vehicle/driver, company credit and a partially allocated payment. A borrows 2,000 L from B and returns 800 L, leaving 1,200 L owed. Sample purchases and debt are excluded from business-wide financial totals, and training transactions do not write the business general ledger.
+
+Test/real station transfers and shared company accounts are blocked. Never assign real employees, retail inventory or other business records to test locations. To clear the batch, select **Remove demo records** and type `REMOVE TEST FUEL DATA`. Cleanup is transactional and stops if another business module references the test locations. Repeated creation requests do not duplicate the active batch. Existing real outlets and records remain intact.
+
 ## First-time administrator setup
 
 1. Open **Fuel Station**. Choose **+ Station** and select the existing fuel outlet. Review and finish old fuel shifts before confirming cutover. Use `Africa/Accra` for Ghana stations using existing ADMABS schedules.
