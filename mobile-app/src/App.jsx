@@ -1,3 +1,5 @@
+import CompanyLetterhead from '../../src/documents/CompanyLetterhead.jsx';
+import { printCompanyDocument } from '../../src/documents/print.js';
 import FuelMenu, { FUEL_SECTIONS } from '../../src/FuelMenu.jsx';
 import FuelOperations from '../../src/FuelOperations.jsx';
 import React, { useEffect, useMemo, useState } from "react";
@@ -525,10 +527,8 @@ function POS({ user }) {
       )}
       {done && (
         <Modal title="Transaction complete" onClose={() => setDone(null)}>
-          <div className="center">
-            <img className="receipt-logo" src={site.logoUrl || "/admabs-logo.png"} alt="ADMABS Investments Ltd." />
-            <h2>{site.companyName || "ADMABS INVESTMENTS LTD."}</h2>
-            <p className="muted">HEAD OFFICE: {site.address || "Ghana"}</p>
+          <div className="center mobile-receipt-document">
+            <CompanyLetterhead site={site} title="SALES RECEIPT" compact />
             <hr />
             <b>{user.branch?.name || user.branches?.[0]?.name || "ADMABS Branch"}</b>
             <p className="muted">{user.outlets?.[0]?.name || "Main outlet"}</p>
@@ -539,7 +539,7 @@ function POS({ user }) {
             <p className="muted">
               Receipt uses the company logo and central transaction record.
             </p>
-            <button className="btn" onClick={() => window.print()}>
+            <button className="btn" onClick={() => printCompanyDocument(document.querySelector(".mobile-receipt-document"), { site, title: "Sales receipt", receipt: true })}>
               Print / Share receipt
             </button>
           </div>
@@ -991,7 +991,7 @@ function Reports({ user }) {
       <button
         className="btn outline"
         style={{ width: "100%" }}
-        onClick={() => window.print()}
+        onClick={() => printCompanyDocument(document.querySelector("main.page"), { title: "Operational report" })}
       >
         Print / Save PDF
       </button>

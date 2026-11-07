@@ -1,3 +1,4 @@
+import { createCompanyPdf, cleanPdfText } from "./documents/branding.js";
 import FuelMenu, { FUEL_SECTIONS } from "./FuelMenu.jsx";
 import React, { useEffect, useState } from "react";
 import "./fuel-operations.css";
@@ -947,26 +948,25 @@ export default function FuelOperations({
   };
   const print = async (onlySale) => {
     try {
-      const { jsPDF } = await import("jspdf");
-      const pdf = new jsPDF();
-      let y = 18;
+      const pdf = await createCompanyPdf({ title: onlySale?._id ? "Fuel receipt / invoice" : `Fuel operations - ${tab}` });
+      let y = pdf.bodyTop;
       const line = (value, bold = false) => {
         pdf.setFont("helvetica", bold ? "bold" : "normal");
         const lines = pdf.splitTextToSize(
-          String(value).replaceAll("GH₵", "GHS"),
+          cleanPdfText(value),
           182,
         );
         for (const l of lines) {
-          if (y > 280) {
+          if (y > 274) {
             pdf.addPage();
-            y = 18;
+            y = pdf.bodyTop;
           }
           pdf.text(l, 14, y);
           y += 6;
         }
       };
       pdf.setFontSize(14);
-      line("ADMABS — Fuel Operations", true);
+      line("Fuel Operations", true);
       pdf.setFontSize(9);
       line(data?.station?.name || "");
       line(`Generated ${new Date().toISOString()}`);
@@ -1059,6 +1059,35 @@ export default function FuelOperations({
           line(
             `${a.number} | ${a.kind} | ${money(a.amountCents)} | ${a.reason}`,
           );
+      } else if (tab === "Inter-station Fuel") {
+        line("Fuel owed and fuel receivable", true);
+        for (const loan of interstation.loans) {
+          const stationName = id => boot.stations.find(st => st._id === id)?.name || id;
+          line(`${loan.number} | ${stationName(loan.lender)} supplied ${stationName(loan.borrower)} | ${loan.fuelType}`);
+          line(`Borrowed ${f(loan.litresMl, 3)} L | remaining ${f(loan.outstandingMl, 3)} L`);
+        }
+        line("Confirmed transfers and repayments", true);
+        for (const transfer of interstation.transfers) line(`${transfer.number} | ${transfer.kind} | ${f(transfer.litresMl, 3)} L | ${transfer.reference || ""}`);
+      } else if (tab === "Tanks and Stock") {
+        line("Tank balances", true);
+        for (const tank of tanks) line(`${tank.code} | ${tank.fuelType} | stock ${f(tank.bookMl, 3)} L | capacity ${f(tank.capacityMl, 3)} L`);
+        line("Stock movement history", true);
+        for (const movement of data?.movements || []) line(`${movement.kind} | ${f(movement.stockDeltaMl, 3)} L | ${movement.reference || ""} | ${movement.reason || ""}`);
+        line("Physical dips", true);
+        for (const dip of data?.dips || []) line(`Measured ${f(dip.physicalMl, 3)} L | calculated ${f(dip.calculatedMl, 3)} L | variance ${f(dip.varianceMl, 3)} L`);
+      } else if (tab === "Company Accounts") {
+        for (const account of companies) line(`${account.accountCode} | ${account.name} | debt ${money(account.debtCents)} | unused advance ${money(account.advanceCents)} | limit ${money(account.limitCents)} | terms ${account.termsDays} days`);
+      } else if (tab === "Payments") {
+        for (const receipt of data?.payments || []) line(`${receipt.number} | ${receipt.method} | received ${money(receipt.amountCents)} | unused ${money(receipt.unappliedCents)} | ${receipt.reference || ""}`);
+      } else if (tab === "Vehicles and Drivers") {
+        line("Vehicles", true);
+        for (const vehicle of statement?.vehicles || []) line(`${vehicle.registration} | ${vehicle.active ? "Active" : "Inactive"} | daily limit ${f(vehicle.dailyMl || 0, 3)} L`);
+        line("Drivers", true);
+        for (const driver of statement?.drivers || []) line(`${driver.name} | ${driver.active ? "Active" : "Inactive"}`);
+      } else if (tab === "Integration Settings") {
+        line("Live hardware control is disabled. Connection records do not operate dispensers.", true);
+        for (const price of data?.prices || []) line(`${price.fuelType} | GHC ${f(price.priceUnits, 4)} / L | effective ${new Date(price.effectiveAt).toISOString()}`);
+        for (const connection of connections) line(`${connection.code} | disabled connection configuration`);
       } else {
         for (const p of report?.periods || periods) {
           line(
@@ -1074,6 +1103,16 @@ export default function FuelOperations({
             );
         }
       }
+      if (tab === "Reports" && report) {
+        line("Report scope and summary", true);
+        line(`Filters: ${filters.start || "Beginning"} to ${filters.end || "Today"}; ${filters.fuelType || "all fuels"}; ${filters.shift || "all shifts"}`);
+        for (const exposure of report.exposure || report.debtAgeing || []) line(`${exposure.accountCode || ""} ${exposure.name || ""} | debt ${money(exposure.debtCents || 0)} | advance ${money(exposure.advanceCents || 0)}`);
+        line("Recorded sales", true);
+        for (const sale of report.sales || []) line(`${sale.number} | ${sale.fuelType} | ${f(sale.litresMl, 3)} L | ${money(sale.amountCents)} | due ${money(sale.dueCents)}`);
+        line("Payments", true);
+        for (const receipt of report.payments || []) line(`${receipt.number} | ${money(receipt.amountCents)} | ${receipt.method}`);
+      }
+      pdf.finishCompanyDocument();
       pdf.save(`ADMABS-fuel-${tab.replaceAll(" ", "-")}.pdf`);
     } catch (e) {
       setError(e.message);
