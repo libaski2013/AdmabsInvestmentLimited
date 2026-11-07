@@ -1,0 +1,19 @@
+.fuel-menu { color: #173d65; width: 100%; min-width: 0; }
+.fuel-menu button { font: inherit; cursor: pointer; }
+.fuel-menu .fuel-menu-toggle { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; border-radius: 12px; padding: 12px 10px; background: #edf3f9; color: inherit; font-size: 13px; font-weight: 700; text-align: left; }
+.fuel-menu .fuel-menu-toggle.is-active { background: #143e69; color: white; }
+.fuel-menu-chevron { margin-left: auto; }
+.fuel-menu .fuel-menu-toggle.is-compact { justify-content: center; }
+.fuel-menu .fuel-menu-list { list-style: none; margin: 5px 0 8px 17px; padding: 0 0 0 10px; border-left: 1px solid #cad8e8; }
+.fuel-menu-list[hidden] { display: none; }
+.fuel-menu .fuel-menu-list button { display: block; width: 100%; border: 0; border-radius: 8px; padding: 10px 9px; margin: 2px 0; color: inherit; background: transparent; text-align: left; font-size: 12px; line-height: 1.4; white-space: normal; }
+.fuel-menu .fuel-menu-list button:hover { background: #e7eff8; }
+.fuel-menu .fuel-menu-list button[aria-current="page"] { background: #dbeafe; color: #123e69; font-weight: 800; }
+.fuel-menu button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.fuel-menu-dark { color: #bfdbfe; }
+.fuel-menu-dark .fuel-menu-toggle { background: transparent; }
+.fuel-menu-dark .fuel-menu-toggle.is-active { background: #dc2626; color: white; }
+.fuel-menu-dark .fuel-menu-list { border-left-color: #5274b4; }
+.fuel-menu-dark .fuel-menu-list button:hover { background: #264c95; color: white; }
+.fuel-menu-dark .fuel-menu-list button[aria-current="page"] { background: #ffffff1f; color: white; }
+.fo-section-title { margin: 18px 0; color: #173d65; font-size: 20px; }

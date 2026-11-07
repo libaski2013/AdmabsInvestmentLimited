@@ -1,3 +1,4 @@
+import FuelMenu, { FUEL_SECTIONS } from './FuelMenu.jsx';
 import FuelOperations from './FuelOperations.jsx';
 import React, { useState, useEffect } from "react";
 import {
@@ -12975,7 +12976,8 @@ function NotifPanel({ notifs, onClose, onMarkRead }) {
 }
 
 /* ─── SIDEBAR ─── */
-function Sidebar({ current, onNav, onClose, role, pendingApprovals }) {
+function Sidebar({ current, onNav, onClose, role, pendingApprovals, fuelSection, onFuelSection }) {
+  const [fuelExpanded, setFuelExpanded] = useState(current === "fuel");
   const acc = ["ceo", "gm"].includes(role)
     ? NAV
     : role === "finance"
@@ -13103,6 +13105,8 @@ function Sidebar({ current, onNav, onClose, role, pendingApprovals }) {
             MODULES
           </p>
           {acc.map((item) => {
+            if (item.id === "fuel") return <FuelMenu key={item.id} dark active={current === "fuel"} expanded={fuelExpanded} section={fuelSection}
+              onToggle={() => setFuelExpanded(value => !value)} onSelect={section => { onFuelSection(section); onNav("fuel"); onClose(); }} />;
             const active = current === item.id;
             const badge = item.id === "approvals" ? pendingApprovals : 0;
             return (
@@ -13353,6 +13357,7 @@ export default function App() {
   const [welcomeVisible,setWelcomeVisible]=useState(false);
   const [screen, setScreen] = useState("dashboard");
   const [sidebar, setSidebar] = useState(false);
+  const [fuelSection, setFuelSection] = useState(FUEL_SECTIONS[0]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState(NOTIFS_D);
   const [pendingApprovals, setPendingApprovals] = useState(0);
@@ -13422,7 +13427,7 @@ export default function App() {
       case "inventory":
         return <InventoryScreen />;
       case "fuel":
-        return <FuelOperations user={currentUser} />;
+        return <FuelOperations user={currentUser} activeSection={fuelSection} hideNavigation />;
       case "finance":
         return <FinanceScreen />;
       case "procurement":
@@ -13635,6 +13640,8 @@ export default function App() {
             {sidebar && (
               <Sidebar
                 current={screen}
+                fuelSection={fuelSection}
+                onFuelSection={setFuelSection}
                 onNav={setScreen}
                 onClose={() => setSidebar(false)}
                 role={role}

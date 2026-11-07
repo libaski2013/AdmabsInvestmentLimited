@@ -1,3 +1,4 @@
+import FuelMenu, { FUEL_SECTIONS } from '../../src/FuelMenu.jsx';
 import FuelOperations from '../../src/FuelOperations.jsx';
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -2418,6 +2419,8 @@ function Attendance({ user }) {
   );
 }
 export default function App() {
+  const [fuelExpanded, setFuelExpanded] = useState(false);
+  const [fuelSection, setFuelSection] = useState(FUEL_SECTIONS[0]);
   const [user, setUser] = useState(savedMobileUser),
     [restoringSession, setRestoringSession] = useState(() => Boolean(localStorage.getItem("admabs_mobile_token")) && !savedMobileUser()),
     [screen, setScreen] = useState(() => localStorage.getItem("admabs_mobile_screen") || "dash"),
@@ -2524,7 +2527,7 @@ export default function App() {
   const content = {
     dash: <Dashboard />,
     pos: <POS user={user} />,
-    fuel: <FuelOperations user={user} tokenStorageKey="admabs_mobile_token" />,
+    fuel: <FuelOperations user={user} tokenStorageKey="admabs_mobile_token" activeSection={fuelSection} hideNavigation />,
     inventory: <Inventory user={user} />,
     procurement: <Procurement />,
     customers: <SimpleRecords type="customers" />,
@@ -2608,7 +2611,9 @@ export default function App() {
               </div>
             </div>
             <hr style={{ borderColor: "#2563eb22" }} />
-            {mods.map((id) => (
+            {mods.map((id) => id === "fuel" ? <FuelMenu key={id} dark active={screen === "fuel"} expanded={fuelExpanded} section={fuelSection}
+              onToggle={() => { setFuelExpanded(value => !value); setScreen("fuel"); }}
+              onSelect={section => { setFuelSection(section); setScreen("fuel"); setDrawer(false); }} /> : (
               <button
                 className={`nav ${screen === id ? "active" : ""}`}
                 key={id}

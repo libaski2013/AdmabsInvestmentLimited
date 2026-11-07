@@ -190,6 +190,15 @@ try {
       .getByRole("heading", { name: "Fuel Station Operations" })
       .waitFor();
     await page.getByText("TEST ONLY PERIOD", { exact: true }).waitFor();
+    const fuelToggle = page.getByRole("button", { name: "Fuel Station", exact: true });
+    assert.equal(await fuelToggle.getAttribute("aria-expanded"), "false");
+    await fuelToggle.click();
+    assert.equal(await fuelToggle.getAttribute("aria-expanded"), "true");
+    assert.equal(await page.getByRole("list", { name: "Fuel Station sections" }).getByRole("button").count(), 12);
+    await fuelToggle.click();
+    assert.equal(await page.getByRole("button", { name: "Fuel Sales", exact: true }).isVisible(), false);
+    await fuelToggle.click();
+
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -198,6 +207,9 @@ try {
     );
     await page.getByRole("button", { name: "Inter-station Fuel", exact: true }).click();
     await page.getByRole("heading", { name: "Fuel owed and fuel receivable" }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Inter-station Fuel", exact: true }).getAttribute("aria-current"), "page");
+    assert.equal(await page.getByLabel("Station", { exact: true }).inputValue(), "TEST-STATION");
+
     await page.getByRole("button", { name: "+ Record fuel loan", exact: true }).click();
     await page.getByRole("dialog").waitFor();
     await page.getByLabel(/^Confirmed litres delivered(?: \*)?$/).waitFor();
@@ -287,6 +299,50 @@ try {
     console.log(
       `PASS ${viewport.width}px: all navigation tabs, company exposure, sale/opening forms, no page errors or page overflow`,
     );
+    // Verify the real application shells, not just the standalone fuel view.
+    await page.route("**/api/**", route => {
+      if (route.request().url().includes("/fuel/operations/")) return route.fallback();
+      const path = new URL(route.request().url()).pathname;
+      const data = path.endsWith("/auth/me") ? { user: { _id: "TEST-USER", role: "super_admin", name: "TEST ONLY Owner", active: true } }
+        : path.endsWith("/sessions/heartbeat") ? { serverTime: new Date().toISOString() } : [];
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(data) });
+    });
+    await page.evaluate(() => {
+      const user = JSON.stringify({ _id: "TEST-USER", role: "super_admin", name: "TEST ONLY Owner", active: true });
+      localStorage.setItem("admabs_token", "TEST-ONLY");
+      localStorage.setItem("admabs_session_user", user);
+      localStorage.setItem("admabs_active_module", "fuel");
+      localStorage.setItem("admabs_mobile_token", "TEST-ONLY");
+      localStorage.setItem("admabs_mobile_user", user);
+      localStorage.setItem("admabs_mobile_screen", "fuel");
+    });
+    const shell = viewport.width > 880 ? "desktop" : "mobile";
+    await page.goto(`http://127.0.0.1:5174/server/test/fuel-ui.html?shell=${shell}`);
+    await page.getByRole("heading", { name: "Fuel Station Operations", exact: true }).waitFor();
+    if (shell === "mobile") await page.getByRole("button", { name: /More$/ }).click();
+    const shellToggle = page.getByRole("button", { name: "Fuel Station", exact: true });
+    if (await shellToggle.getAttribute("aria-expanded") === "false") await shellToggle.click();
+    const sections = page.getByRole("list", { name: "Fuel Station sections" });
+    assert.equal(await sections.getByRole("button").count(), 12);
+    const names = await sections.getByRole("button").allTextContents();
+    for (const name of names) {
+      if (shell === "mobile" && !await sections.isVisible()) await page.getByRole("button", { name: /More$/ }).click();
+      await sections.getByRole("button", { name, exact: true }).click();
+      await page.getByRole("heading", { name, exact: true }).first().waitFor();
+      assert.equal(await page.getByLabel("Station", { exact: true }).inputValue(), "TEST-STATION");
+    }
+    if (shell === "mobile") await page.getByRole("button", { name: /More$/ }).click();
+    await shellToggle.click();
+    assert.equal(await sections.isVisible(), false);
+    await shellToggle.click();
+    if (shell === "desktop") {
+      await page.getByRole("button", { name: "Collapse", exact: true }).click();
+      assert.equal(await sections.isVisible(), false);
+      await shellToggle.click();
+      assert.equal(await sections.isVisible(), true);
+    }
+    assert.deepEqual(errors, []);
+    console.log(`PASS ${shell}: twelve sidebar sections, active section and station retained, collapse/reopen`);
     await page.close();
   }
 } finally {
