@@ -1,3 +1,4 @@
+import FuelMenu, { FUEL_SECTIONS } from "./FuelMenu.jsx";
 import React, { useEffect, useState } from "react";
 import "./fuel-operations.css";
 const BASE =
@@ -42,32 +43,8 @@ const options = (rows) =>
     x._id,
     x.name || x.registration || x.number || `${x.pumpCode || ""} / ${x.code}`,
   ]);
-const tabs = [
-  "Fuel Dashboard",
-  "Fuel Sales",
-  "Meter Readings",
-  "Shift Reconciliation",
-  "Company Accounts",
-  "Vehicles and Drivers",
-  "Payments",
-  "Statements and Invoices",
-  "Inter-station Fuel",
-  "Tanks and Stock",
-  "Reports",
-  "Integration Settings",
-];
-const tooltips = {
-  "Fuel Sales":
-    "Individual mode records every sale. Summary mode records company issues and derives walk-in totals.",
-  "Meter Readings":
-    "Opening must equal the last approved closing. Supervisor meter events handle resets and replacements.",
-  "Shift Reconciliation":
-    "Record actual current-sale collections. Earlier debt receipts appear separately.",
-  "Company Accounts":
-    "Fuel debt and advance credit are separate. Existing customer balances remain unchanged.",
-  "Tanks and Stock":
-    "Physical dips never overwrite calculated stock. All changes require linked stock movements.",
-};
+const tabs = FUEL_SECTIONS;
+
 function Table({ columns, rows, empty = "No records yet." }) {
   const [search, setSearch] = useState("");
   const filtered = rows.filter((row) =>
@@ -315,10 +292,14 @@ const methods = [
 export default function FuelOperations({
   user,
   tokenStorageKey = "admabs_token",
+  activeSection,
+  hideNavigation = false,
 }) {
   const fuelRequest = (path, body, key) =>
     requestFuel(path, body, key, tokenStorageKey);
-  const [tab, setTab] = useState(tabs[0]);
+  const [localTab, setTab] = useState(tabs[0]);
+  const tab = tabs.includes(activeSection) ? activeSection : localTab;
+  const [menuExpanded, setMenuExpanded] = useState(false);
   const [boot, setBoot] = useState(null);
   const [stationId, setStationId] = useState("");
   const [data, setData] = useState(null);
@@ -1155,6 +1136,7 @@ export default function FuelOperations({
         <label>
           Station
           <select
+            aria-label="Station"
             value={stationId}
             onChange={(e) => setStationId(e.target.value)}
           >
@@ -1171,18 +1153,8 @@ export default function FuelOperations({
           Manual operations · Live hardware control disabled
         </span>
       </div>
-      <nav className="fo-nav" aria-label="Fuel operations">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            className={tab === t ? "selected" : ""}
-            onClick={() => setTab(t)}
-            title={tooltips[t] || t}
-          >
-            {t}
-          </button>
-        ))}
-      </nav>
+      {!hideNavigation && <FuelMenu expanded={menuExpanded} onToggle={() => setMenuExpanded(value => !value)} section={tab} active onSelect={setTab} />}
+      <h2 className="fo-section-title">{tab}</h2>
       {!stationId && (
         <div className="fo-card">
           <h3>Set up a real station to begin</h3>

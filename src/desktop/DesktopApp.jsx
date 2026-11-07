@@ -1,3 +1,4 @@
+import FuelMenu, { FUEL_SECTIONS } from '../FuelMenu.jsx';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -1119,6 +1120,9 @@ export default function DesktopApp() {
   const role = user?.role || null;
   const [active, setActive] = useState(()=>localStorage.getItem('admabs_active_module')||'dash');
   const [sideOpen, setSideOpen] = useState(true);
+  const [fuelExpanded, setFuelExpanded] = useState(false);
+  const [fuelSection, setFuelSection] = useState(FUEL_SECTIONS[0]);
+  useEffect(() => { if (active === "fuel") setFuelExpanded(true); }, [active]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [serverOffset,setServerOffset]=useState(0);
   const [,setClockTick]=useState(0);
@@ -1158,6 +1162,7 @@ export default function DesktopApp() {
   const ghanaNow=new Date(Date.now()+serverOffset);const ghanaHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Africa/Accra',hour:'2-digit',hourCycle:'h23'}).format(ghanaNow));const greeting=ghanaHour<12?'Good morning':ghanaHour<17?'Good afternoon':'Good evening';
 
   const renderView = () => {
+    if (active === "fuel") return <FuelOperations user={user} activeSection={fuelSection} hideNavigation />;
     if (active === 'approvals') return <ApprovalsView onChanged={refreshApprovals} />;
     const V = SECTIONS[active];
     return V ? <V user={user} /> : <DashView />;
@@ -1183,6 +1188,9 @@ export default function DesktopApp() {
             <div key={group.group}>
               {sideOpen && <p className="text-blue-400 text-xs font-bold uppercase tracking-widest px-2 py-1 mt-1" style={{ fontSize: 9, opacity: 0.5 }}>{group.group}</p>}
               {group.items.map(n => {
+                if (n.id === "fuel") return <FuelMenu key={n.id} dark compact={!sideOpen} icon={<Fuel size={15} />} active={active === "fuel"} expanded={fuelExpanded} section={fuelSection}
+                  onToggle={() => { setSideOpen(true); setFuelExpanded(!sideOpen || active !== "fuel" || !fuelExpanded); setActive("fuel"); }}
+                  onSelect={section => { setFuelSection(section); setActive("fuel"); }} />;
                 const Ic = n.icon;
                 const badge = n.id === 'approvals' ? pendingApprovals : null;
                 return (
