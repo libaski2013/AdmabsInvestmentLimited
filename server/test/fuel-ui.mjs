@@ -89,6 +89,7 @@ try {
     let demoActive = false, demoSummary = null, scenarioPayload;
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/api/site/content", route => route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({companyName:"ADMABS Investments Limited",address:"TEST ONLY OFFICE",phone:"TEST PHONE"})}));
     await page.route("**/api/fuel/operations/**", (route) => {
       const path = new URL(route.request().url()).pathname;
       let data = {};
@@ -361,6 +362,30 @@ try {
     }
     assert.deepEqual(errors, []);
     console.log(`PASS ${shell}: twelve sidebar sections, active section and station retained, collapse/reopen`);
+    await page.context().addInitScript(() => { window.print = () => { document.body.dataset.printed = "true"; }; });
+    await page.goto("http://127.0.0.1:5174/server/test/fuel-ui.html?shell=documents");
+    const brandedDownload = page.waitForEvent("download");
+    await page.getByRole("button", {name:"Download branded fixture",exact:true}).click();
+    const brandedFile = await brandedDownload, brandedChunks=[];
+    const brandedStream = await brandedFile.createReadStream(); for await(const chunk of brandedStream)brandedChunks.push(chunk);
+    const brandedBytes=Buffer.concat(brandedChunks).toString("latin1");
+    const pages=Number(await page.locator("body").getAttribute("data-pdf-pages"));
+    assert.ok(pages>=3,"long descriptions must paginate");
+    assert.ok((brandedBytes.match(/TEST COMPANY LTD/g)||[]).length>=pages,"company name repeats on every PDF page");
+    assert.ok((brandedBytes.match(/DOCUMENT PAGINATION CHECK/g)||[]).length>=pages,"document title repeats on every PDF page");
+    assert.ok(brandedBytes.includes(`Page ${pages} of ${pages}`),"last PDF page is numbered");
+    const popupEvent=page.waitForEvent("popup");
+    await page.getByRole("button",{name:"Print branded fixture",exact:true}).click();
+    const printed=await popupEvent;
+    await printed.locator('body[data-printed="true"]').waitFor();
+    assert.equal(await printed.locator(".document-brand strong").innerText(),"TEST COMPANY LTD");
+    const printedText=await printed.locator("body").innerText();
+    assert.ok(printedText.includes("TEST INVOICE 123"));
+    assert.ok(printedText.includes("2026-11-07"));
+    assert.ok(!printedText.includes("DO NOT PRINT"),"application menus and buttons stay out of printed documents");
+    assert.equal(await printed.locator("[data-company-letterhead]").count(),0,"no duplicate letterhead inside printed content");
+    await printed.close();
+    console.log(`PASS ${viewport.width}px: branded multipage PDFs and isolated receipt print preview`);
     await page.close();
   }
 } finally {

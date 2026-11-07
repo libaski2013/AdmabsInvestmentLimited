@@ -12,6 +12,7 @@
       import FuelOperations from "/src/FuelOperations.jsx";
       const shell = new URLSearchParams(location.search).get("shell");
       let Component = FuelOperations;
+      if (shell === "documents") Component = (await import("/server/test/document-fixture.jsx")).default;
       if (shell === "desktop") Component = (await import("/src/desktop/DesktopApp.jsx")).default;
       if (shell === "mobile") {
         await import("/mobile-app/src/style.css");
