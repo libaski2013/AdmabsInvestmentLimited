@@ -1135,7 +1135,7 @@ export default function FuelOperations({
           }, {}, "Adds 50 posted purchases and one reversed-entry example per training station, plus diesel/petrol tanks, day/night periods, payments, advances, credit controls, deliveries, dips, and partial/full fuel-loan repayments. Existing test activity is preserved. Real stations and accounts remain unchanged.")}>Add 50 scenario purchases per station</button>}
         </div>
       </div>}
-      {boot.demoSummary && <details className="fo-card">
+      {boot?.demoSummary && <details className="fo-card">
         <summary>Training scenario pack: starting figures and practice steps</summary>
         <p>{boot.demoSummary.note}</p>
         <p>Each station received 50 posted purchases and one reversed entry. The pack covers cash, MoMo, card, credit, mixed payments, prepaid fuel, partial/full debt payments, unallocated advances, overdue/suspended/limited accounts, vehicle/driver links, deliveries, physical dips and day/night periods. A summary period includes 50 L of derived walk-in sales; a submitted period deliberately has a GHC 20 collection shortage. Connections remain disabled.</p>
