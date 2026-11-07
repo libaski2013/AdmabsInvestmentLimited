@@ -86,6 +86,7 @@ try {
     const page = await browser.newPage({ viewport });
     let needsPreparation = false;
     let demoPayload;
+    let demoActive = false, demoSummary = null, scenarioPayload;
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.route("**/api/fuel/operations/**", (route) => {
@@ -99,9 +100,15 @@ try {
           transactionsSupported: true,
           schemaReady: !needsPreparation,
           canManageDemo: true,
-          demoActive: false,
+          demoActive,
+          demoSummary,
         };
-      else if (path.endsWith("/demo/seed")) { demoPayload = route.request().postDataJSON(); data = { purchases: 20 }; }
+      else if (path.endsWith("/demo/seed")) { demoPayload = route.request().postDataJSON(); data = { purchases: 20 }; demoActive = true; }
+      else if (path.endsWith("/demo/scenarios")) {
+        scenarioPayload = route.request().postDataJSON();
+        demoSummary = { version: 1, note: "TEST ONLY starting scenario figures", stations: [] };
+        data = demoSummary;
+      }
       else if (path.endsWith("/prepare")) { needsPreparation = false; data = { ready: true }; }
       else if (path.endsWith("/companies/TEST-COMPANY/statement"))
         data = {
@@ -295,6 +302,17 @@ try {
     await demoSave.click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
     assert.deepEqual(demoPayload, { confirmation: "CREATE TEST FUEL DATA" });
+    await page.getByRole("button", { name: "Add 50 scenario purchases per station", exact: true }).click();
+    const scenarioSave = page.getByRole("dialog").getByRole("button", { name: "Save record", exact: true });
+    assert.equal(await scenarioSave.isEnabled(), false);
+    await page.getByRole("checkbox", { name: "I confirm adding fictional scenarios to the training stations", exact: true }).check();
+    await scenarioSave.click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.deepEqual(scenarioPayload, { confirmation: "CREATE TEST FUEL DATA" });
+    assert.equal(await page.getByRole("button", { name: "Add 50 scenario purchases per station", exact: true }).count(), 0);
+    await page.getByText("Training scenario pack: starting figures and practice steps", { exact: true }).click();
+    await page.getByText("TEST ONLY starting scenario figures", { exact: true }).waitFor();
+
     assert.deepEqual(errors, []);
     console.log(
       `PASS ${viewport.width}px: all navigation tabs, company exposure, sale/opening forms, no page errors or page overflow`,
