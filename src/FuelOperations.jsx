@@ -44,18 +44,7 @@ const options = (rows) =>
     x.name || x.registration || x.number || `${x.pumpCode || ""} / ${x.code}`,
   ]);
 const tabs = FUEL_SECTIONS;
-const tooltips = {
-  "Fuel Sales":
-    "Individual mode records every sale. Summary mode records company issues and derives walk-in totals.",
-  "Meter Readings":
-    "Opening must equal the last approved closing. Supervisor meter events handle resets and replacements.",
-  "Shift Reconciliation":
-    "Record actual current-sale collections. Earlier debt receipts appear separately.",
-  "Company Accounts":
-    "Fuel debt and advance credit are separate. Existing customer balances remain unchanged.",
-  "Tanks and Stock":
-    "Physical dips never overwrite calculated stock. All changes require linked stock movements.",
-};
+
 function Table({ columns, rows, empty = "No records yet." }) {
   const [search, setSearch] = useState("");
   const filtered = rows.filter((row) =>
@@ -1147,6 +1136,7 @@ export default function FuelOperations({
         <label>
           Station
           <select
+            aria-label="Station"
             value={stationId}
             onChange={(e) => setStationId(e.target.value)}
           >
