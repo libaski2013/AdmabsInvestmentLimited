@@ -118,6 +118,7 @@ export async function seedFuelDemo(user, session) {
   }
   step = "finish training batch";
   run.active = true; run.batch = batch; run.branch = branch._id;
+  run.scenarioVersion = undefined; run.scenarioSummary = undefined;
   run.stations = stations.map(x => x._id); run.companies = [company._id]; run.user = user.id;
   await run.save({ session });
   return { batch, stations: run.stations, purchases: 20, outstandingLitres: 1200 };

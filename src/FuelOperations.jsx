@@ -1129,8 +1129,25 @@ export default function FuelOperations({
             return { confirmation: "CREATE TEST FUEL DATA" };
           }, {}, "Fictional training values only: diesel GHC 10/L, 10,000 L opening stock per tank, zero starting company debt. No real outlet, meter or customer balance will be changed.")}>Create 20 demo purchases</button>
           : <button disabled={!boot.schemaReady} onClick={() => open("Remove fuel training records", [input("confirmation", "Type REMOVE TEST FUEL DATA")], "/demo/remove", x => x, {}, "Permanently removes only the tracked fuel training batch and its test transactions. Cleanup stops if other business records reference its locations.")}>Remove demo records</button>}
+          {boot.demoActive && !boot.demoSummary && <button disabled={!boot.schemaReady} onClick={() => open("Expand fuel training scenarios", [input("confirmTraining", "I confirm adding fictional scenarios to the training stations", { type: "checkbox", required: true })], "/demo/scenarios", x => {
+            if (x.confirmTraining !== true) throw new Error("Confirm the training scenario pack.");
+            return { confirmation: "CREATE TEST FUEL DATA" };
+          }, {}, "Adds 50 posted purchases and one reversed-entry example per training station, plus diesel/petrol tanks, day/night periods, payments, advances, credit controls, deliveries, dips, and partial/full fuel-loan repayments. Existing test activity is preserved. Real stations and accounts remain unchanged.")}>Add 50 scenario purchases per station</button>}
         </div>
       </div>}
+      {boot?.demoSummary && <details className="fo-card">
+        <summary>Training scenario pack: starting figures and practice steps</summary>
+        <p>{boot.demoSummary.note}</p>
+        <p>Each station received 50 posted purchases and one reversed entry. The pack covers cash, MoMo, card, credit, mixed payments, prepaid fuel, partial/full debt payments, unallocated advances, overdue/suspended/limited accounts, vehicle/driver links, deliveries, physical dips and day/night periods. A summary period includes 50 L of derived walk-in sales; a submitted period deliberately has a GHC 20 collection shortage. Connections remain disabled.</p>
+        <Table rows={boot.demoSummary.stations || []} columns={[
+          ["code", "Training station"], ["postedPurchases", "Added posted purchases"], ["litres", "Recorded L"],
+          ["salesValue", "Recorded sales GHC"], ["derivedWalkInValue", "Extra derived walk-in GHC"],
+          ["immediateCollections", "Immediate sale collections GHC"], ["remainingDebt", "Scenario debt GHC"],
+          ["availableAdvance", "Unused advances GHC"], ["dieselStockLitres", "Scenario diesel tank L"],
+          ["petrolStockLitres", "Scenario petrol tank L"], ["nextClosingMeterLitres", "Open scenario nozzle closing L before more test sales"],
+        ]} />
+        <p>Choose a training station, then follow Fuel Sales → Company Accounts → Payments → Statements and Invoices → Meter Readings → Shift Reconciliation → Tanks and Stock → Inter-station Fuel → Reports. Identify scenario rows by SCENARIO in their references. Review the GHC 20 shortage before approving its period. The fully repaid scenario loan is settled; the other has 400 L remaining. Existing starter loans are additional.</p>
+      </details>}
       {data?.station.demoBatch && <p className="fo-hint"><strong>TEST ONLY — Training station.</strong> All quantities, prices, purchases and accounts here are fictional. Real companies and real stations cannot be linked to this training batch.</p>}
       <div className="fo-toolbar">
         <label>

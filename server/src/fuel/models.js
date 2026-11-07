@@ -412,6 +412,8 @@ export const StationTransfer = model("FuelStationTransferV2", {
 models.StationLoan = StationLoan;
 models.StationTransfer = StationTransfer;
 export const DemoRun = model("FuelDemoRunV2", {
+  scenarioVersion: Number,
+  scenarioSummary: Schema.Types.Mixed,
   key: { type: String, required: true, unique: true },
   active: Boolean,
   batch: String,

@@ -1016,3 +1016,90 @@ test("training payment rejection rolls back batched sales, stock and audit recor
   }
   assert.equal((await req("/demo/seed", { confirmation: "CREATE TEST FUEL DATA" })).purchases, 20);
 });
+
+test("expanded scenarios add fifty posted purchases per training station and reconcile every ledger and tank", async () => {
+  const body = { confirmation: "CREATE TEST FUEL DATA" };
+  await req("/demo/scenarios", body, 409);
+  const starter = await req("/demo/seed", body);
+  const originalTank = await Tank.findOne({ station: starter.stations[0] }).lean();
+  let calls = 0; const oldDebug = mongoose.get("debug");
+  mongoose.set("debug", () => { calls++; });
+  let result;
+  try { result = await req("/demo/scenarios", body); }
+  finally { mongoose.set("debug", oldDebug); }
+  assert.ok(calls < 50, `scenario expansion used ${calls} database calls`);
+  assert.equal(result.addedPurchases, 153);
+  assert.equal(result.postedPurchases, 150);
+  assert.equal(result.stations.length, 3);
+  const repeated = await req("/demo/scenarios", body);
+  assert.equal(repeated.existing, true);
+  const restrictedOwner = await User.create({ name: "TEST scenario owner", username: "test-scenario-owner", passwordHash: "TEST ONLY", role: "ceo" });
+  const restrictedToken = app.jwt.sign({ id: String(restrictedOwner._id), role: "ceo" });
+  for (const summary of result.stations) {
+    const sales = await FuelSale.find({ station: summary.station, sourceRef: /^SCENARIO-/ }).lean();
+    assert.equal(sales.length, 51);
+    assert.equal(sales.filter(sale => sale.status === "posted").length, 50);
+    assert.equal(sales.filter(sale => sale.status === "reversed").length, 1);
+    const tanks = await Tank.find({ station: summary.station, code: /^SCENARIO-/ }).lean();
+    assert.equal(tanks.length, 2);
+    for (const t of tanks) {
+      const moves = await models.Movement.find({ tank: t._id }).lean();
+      assert.equal(moves.reduce((sum, row) => sum + row.stockDeltaMl, 0), t.bookMl);
+      assert.equal(t.bookMl / 1000, t.fuelType === "diesel" ? summary.dieselStockLitres : summary.petrolStockLitres);
+    }
+    const periods = await Period.find({ station: summary.station, number: /^SC-PERIOD-/ }).lean();
+    assert.equal(periods.length, 5);
+    assert.equal(periods.filter(period => period.status === "posted").length, 3);
+    for (const period of periods.filter(period => period.status === "posted")) assert.deepEqual(period.reconciliation.flags, []);
+    assert.equal(periods.find(period => period.status === "submitted").reconciliation.moneyVarianceCents, -2000);
+    assert.equal(periods.find(period => period.mode === "summary").reconciliation.derivedMl, 50000);
+    const companies = await Company.find({ stations: summary.station, accountCode: /^SCENARIO-/ }).lean();
+    assert.equal(companies.length, 5);
+    for (const c of companies) {
+      const invoices = await FuelSale.find({ company: c._id, status: "posted" }).lean();
+      const ledger = await models.Ledger.find({ company: c._id }).lean();
+      const receipts = await Payment.find({ company: c._id }).lean();
+      assert.equal(invoices.reduce((sum, invoice) => sum + invoice.dueCents, 0), c.debtCents);
+      assert.equal(ledger.reduce((sum, row) => sum + row.debitCents - row.creditCents, 0), c.debtCents);
+      assert.equal(ledger.reduce((sum, row) => sum + row.advanceDeltaCents, 0), c.advanceCents);
+      assert.equal(receipts.reduce((sum, row) => sum + row.unappliedCents, 0), c.advanceCents);
+      for (const receipt of receipts) assert.equal(receipt.amountCents, receipt.unappliedCents + receipt.allocations.reduce((sum, allocation) => sum + allocation.amountCents, 0));
+    }
+    const p = periods.find(period => period.status === "draft");
+    for (const suffix of ["limit", "suspended", "overdue"]) {
+      const c = companies.find(c => c.accountCode.endsWith("-" + suffix));
+      const v = await models.Vehicle.findOne({ company: c._id });
+      const d = await models.Driver.findOne({ company: c._id });
+      await req("/sales", { period: p._id, litres: "100", sourceRef: randomUUID(), eventKey: randomUUID(), company: c._id, vehicle: v._id, driver: d._id, authorisation: "TEST ONLY" }, 409, randomUUID(), restrictedToken);
+    }
+  }
+  assert.equal((await Tank.findById(originalTank._id)).bookMl, originalTank.bookMl);
+  assert.equal(await Journal.countDocuments(), 0);
+  const finance = await (await import("../src/fuel/reporting.js")).fuelFinancials({}, new Date(0), new Date(Date.now() + 60000));
+  assert.equal(finance.revenue, 0); assert.equal(finance.receivables, 0);
+  const loans = await models.StationLoan.find({ number: /^SC-LOAN-/ }).lean();
+  assert.deepEqual(loans.map(loan => loan.outstandingMl).sort((a, b) => a - b), [0, 400000]);
+  const boot = await req("/bootstrap"); assert.equal(boot.demoSummary.version, 1);
+  await req("/demo/remove", { confirmation: "REMOVE TEST FUEL DATA" });
+  assert.equal(await FuelSale.countDocuments({ sourceRef: /^SCENARIO-/ }), 0);
+  await req("/demo/seed", body);
+  assert.equal((await req("/bootstrap")).demoSummary, null);
+});
+
+test("expanded scenario database rejection rolls back new fixtures and permits retry", async () => {
+  const body = { confirmation: "CREATE TEST FUEL DATA" };
+  await req("/demo/seed", body);
+  const collection = Payment.collection.name;
+  await mongoose.connection.db.command({ collMod: collection, validator: { $jsonSchema: { required: ["TEST_ONLY_required_field"] } }, validationLevel: "strict", validationAction: "error" });
+  try {
+    const response = await req("/demo/scenarios", body, 500);
+    assert.equal(response.diagnostic.databaseCode, "121");
+    assert.equal(await Company.countDocuments({ accountCode: /^SCENARIO-/ }), 0);
+    assert.equal(await Tank.countDocuments({ code: /^SCENARIO-/ }), 0);
+    assert.equal(await FuelSale.countDocuments({ sourceRef: /^SCENARIO-/ }), 0);
+    assert.equal((await req("/bootstrap")).demoSummary, null);
+  } finally {
+    await mongoose.connection.db.command({ collMod: collection, validator: {} });
+  }
+  assert.equal((await req("/demo/scenarios", body)).postedPurchases, 150);
+});

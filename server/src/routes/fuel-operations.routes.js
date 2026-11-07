@@ -1,3 +1,4 @@
+import { expandFuelDemo } from "../fuel/demo-scenarios.js";
 import { confirmsFuelTraining } from "../fuel/confirmation.js";
 import { fuelFailureResponse } from "../fuel/failure.js";
 import { fuelSchemaStatus, prepareFuelSchema } from "../fuel/schema.js";
@@ -126,6 +127,11 @@ export default async function fuelOperations(fastify) {
     fail(confirmsFuelTraining(r.body?.confirmation), "Confirm test data creation");
     return seedFuelDemo(r.user, s);
   });
+  post("/demo/scenarios", "fuel.equipment.configure", async (r, s) => {
+    demoAdministrator(r.user);
+    fail(confirmsFuelTraining(r.body?.confirmation), "Confirm test data creation");
+    return expandFuelDemo(r.user, s);
+  });
   post("/demo/remove", "fuel.equipment.configure", async (r, s) => {
     demoAdministrator(r.user);
     fail(r.body.confirmation === "REMOVE TEST FUEL DATA", "Confirm removal of the test fuel batch");
@@ -146,6 +152,8 @@ export default async function fuelOperations(fastify) {
       schemaReady,
       schemaMissing: schema.missing,
       demoActive: Boolean(await DemoRun.exists({ key: "fuel-flow", active: true })),
+      demoSummary: ["super_admin", "ceo"].includes(request.user.role)
+        ? (await DemoRun.findOne({ key: "fuel-flow", active: true }).select("scenarioSummary").lean())?.scenarioSummary || null : null,
       canManageDemo: ["super_admin", "ceo"].includes(request.user.role),
       permissions: Object.fromEntries(
         [
